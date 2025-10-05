@@ -2,42 +2,23 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
-     */
-    protected $fillable = [
-        'name',
-        'email',
-        'password',
-    ];
+    /** @var list<string> */
+    protected $fillable = ['name','email','password'];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
-     */
-    protected $hidden = [
-        'password',
-        'remember_token',
-    ];
+    /** @var list<string> */
+    protected $hidden = ['password','remember_token'];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
+    /** @return array<string,string> */
     protected function casts(): array
     {
         return [
@@ -45,9 +26,37 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
-    public function transactions()
-{
-    return $this->hasMany(Transaction::class);
-}
 
+    // Relationships
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(Transaction::class);
+    }
+
+    public function roles(): BelongsToMany
+    {
+        // Pivot is role_user (role_id, user_id)
+        return $this->belongsToMany(Role::class, 'role_user', 'user_id', 'role_id');
+    }
+
+    // Helpers
+    public function roleNames(): array
+    {
+        try {
+            return $this->roles()->pluck('name')->toArray();
+        } catch (\Throwable $e) {
+            // Fallback to users.role column if you use it
+            return $this->role ? [$this->role] : [];
+        }
+    }
+
+    public function hasRoleName(string $name): bool
+    {
+        return in_array($name, $this->roleNames(), true);
+    }
+
+    public function hasAnyRole(array $names): bool
+    {
+        return count(array_intersect($this->roleNames(), $names)) > 0;
+    }
 }

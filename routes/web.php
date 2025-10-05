@@ -11,32 +11,41 @@ use App\Http\Controllers\LoanController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\DebitCreditController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Auth\RoleRedirectController; // 👈 Add this line
 
-// 🔹 Public landing page
+// ======================================================
+// 🔐 Redirect Root to Login
+// ======================================================
 Route::get('/', function () {
-    return view('welcome');
+    return redirect()->route('login');
 });
 
 // ======================================================
-// 🔐 AUTHENTICATED ROUTES
+// 🚦 Role-Based Redirect after Login (Laravel 11+ Breeze)
 // ======================================================
-Route::middleware(['auth'])->group(function () {
+Route::get('/redirect-by-role', RoleRedirectController::class)
+    ->middleware(['auth'])
+    ->name('redirect.by.role');
+
+// ======================================================
+// 🔐 Authenticated Routes
+// ======================================================
+Route::middleware(['auth', 'verified'])->group(function () {
 
     // =======================
     // 🏠 Dashboard
     // =======================
     Route::get('/dashboard', [DashboardController::class, 'index'])
         ->name('dashboard')
-        ->middleware('role:admin,manager,cashier'); // All roles can view dashboard
+        ->middleware('role:admin,manager,cashier');
 
     // =======================
     // 🧾 Finance & Operations
     // =======================
-    // Debits & Credits (finance)
     Route::resource('debits-credits', DebitCreditController::class)
         ->middleware('role:admin,manager,cashier');
 
-    // Transactions
     Route::get('/transactions', [TransactionController::class, 'index'])
         ->name('transactions.index')
         ->middleware('role:admin,manager');
@@ -72,4 +81,16 @@ Route::middleware(['auth'])->group(function () {
     // =======================
     Route::resource('loans', LoanController::class)
         ->middleware('role:admin,manager');
+
+    // =======================
+    // 👤 User Profile (from Breeze)
+    // =======================
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
+
+// ======================================================
+// 🔁 Auth Routes (login, register, forgot password, etc.)
+// ======================================================
+require __DIR__.'/auth.php';
