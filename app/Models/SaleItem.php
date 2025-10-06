@@ -15,8 +15,11 @@ class SaleItem extends Model
         'quantity',
         'unit_price',
         'subtotal',
+        'cost_price',
+        'profit',
     ];
 
+    // 🔗 Relationships
     public function sale()
     {
         return $this->belongsTo(Sale::class);
@@ -25,5 +28,14 @@ class SaleItem extends Model
     public function product()
     {
         return $this->belongsTo(Product::class);
+    }
+
+    // 📈 Compute profit (helpful for reports)
+    public function calculateProfit(): float
+    {
+        if (is_null($this->cost_price)) {
+            return 0;
+        }
+        return round(($this->unit_price - $this->cost_price) * $this->quantity, 2);
     }
 }

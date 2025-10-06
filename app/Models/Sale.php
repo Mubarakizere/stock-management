@@ -14,8 +14,13 @@ class Sale extends Model
         'user_id',
         'sale_date',
         'total_amount',
+        'amount_paid',
+        'method',
+        'status',
+        'notes',
     ];
 
+    // 🧩 Relationships
     public function customer()
     {
         return $this->belongsTo(Customer::class);
@@ -30,9 +35,21 @@ class Sale extends Model
     {
         return $this->hasMany(SaleItem::class);
     }
+
     public function transaction()
     {
-    return $this->hasOne(Transaction::class);
+        return $this->hasOne(Transaction::class);
     }
 
+    // 📊 Accessor for balance due
+    public function getBalanceAttribute()
+    {
+        return ($this->total_amount ?? 0) - ($this->amount_paid ?? 0);
+    }
+
+    // 📈 Profit summary for reports
+    public function totalProfit()
+    {
+        return $this->items->sum('profit');
+    }
 }

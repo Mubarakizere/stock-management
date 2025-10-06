@@ -12,9 +12,19 @@ class Purchase extends Model
     protected $fillable = [
         'supplier_id',
         'user_id',
+        'invoice_number',
         'purchase_date',
+        'status',
+        'subtotal',
+        'tax',
+        'discount',
         'total_amount',
+        'amount_paid',
+        'balance_due',
+        'notes',
     ];
+
+    /* ─────────── Relationships ─────────── */
 
     public function supplier()
     {
@@ -30,8 +40,20 @@ class Purchase extends Model
     {
         return $this->hasMany(PurchaseItem::class);
     }
+
     public function transaction()
     {
-    return $this->hasOne(Transaction::class);
+        return $this->hasOne(Transaction::class);
+    }
+
+    /* ─────────── Helper Methods ─────────── */
+
+    public function updateTotals()
+    {
+        $subtotal = $this->items->sum('total_cost');
+        $this->subtotal = $subtotal;
+        $this->total_amount = ($subtotal + $this->tax) - $this->discount;
+        $this->balance_due = $this->total_amount - $this->amount_paid;
+        $this->save();
     }
 }
