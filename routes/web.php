@@ -15,7 +15,6 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\StockMovementController;
 use App\Http\Controllers\Auth\RoleRedirectController;
 
-
 // ======================================================
 // 🔐 Redirect Root to Login
 // ======================================================
@@ -43,9 +42,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('role:admin,manager,cashier');
 
     // =======================
+    // 👥 Users (Admin only)
+    // =======================
+    Route::middleware('role:admin')->group(function () {
+        Route::get('/users', function () {
+            return view('users.index'); // simple placeholder
+        })->name('users.index');
+    });
+
+    // =======================
     // 🧾 Finance & Operations
     // =======================
-    Route::resource('debits-credits', DebitCreditController::class)
+    Route::resource('debit-credits', DebitCreditController::class)
         ->middleware('role:admin,manager,cashier');
 
     Route::get('/transactions', [TransactionController::class, 'index'])
@@ -76,38 +84,45 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('role:admin,manager,cashier');
 
     // =======================
-// 📊 Stock Movements
+    // 📊 Stock Movements
+    // =======================
+    Route::get('/stock-history', [StockMovementController::class, 'index'])
+        ->name('stock.history')
+        ->middleware('role:admin,manager,cashier');
+
+    Route::get('/stock-history/export/csv', [StockMovementController::class, 'exportCsv'])
+        ->name('stock.history.export.csv')
+        ->middleware('role:admin,manager');
+
+    Route::get('/stock-history/export/pdf', [StockMovementController::class, 'exportPdf'])
+        ->name('stock.history.export.pdf')
+        ->middleware('role:admin,manager');
+    // =======================
+// 📈 Reports (Admin only)
 // =======================
-Route::get('/stock-history', [StockMovementController::class, 'index'])
-    ->name('stock.history')
-    ->middleware('role:admin,manager,cashier');
-
-Route::get('/stock-history/export/csv', [StockMovementController::class, 'exportCsv'])
-    ->name('stock.history.export.csv')
-    ->middleware('role:admin,manager');
-
-Route::get('/stock-history/export/pdf', [StockMovementController::class, 'exportPdf'])
-    ->name('stock.history.export.pdf')
-    ->middleware('role:admin,manager');
-
-
+Route::middleware('role:admin')->group(function () {
+    Route::get('/reports', function () {
+        return view('reports.index');
+    })->name('reports.index');
+});
 
     // =======================
     // 💰 Sales & Purchases
     // =======================
     Route::resource('purchases', PurchaseController::class)
         ->middleware('role:admin,manager');
-    Route::get('/sales/{sale}/invoice', [SaleController::class, 'invoice'])
-    ->name('sales.invoice')
-    ->middleware('role:admin,manager,cashier');
-
-    // 🧾 Purchase Invoice PDF (DomPDF)
-    Route::get('/purchases/{purchase}/invoice', [PurchaseController::class, 'invoice'])
-        ->name('purchases.invoice')
-        ->middleware('role:admin,manager');
 
     Route::resource('sales', SaleController::class)
         ->middleware('role:admin,manager,cashier');
+
+    // 🧾 Invoices
+    Route::get('/sales/{sale}/invoice', [SaleController::class, 'invoice'])
+        ->name('sales.invoice')
+        ->middleware('role:admin,manager,cashier');
+
+    Route::get('/purchases/{purchase}/invoice', [PurchaseController::class, 'invoice'])
+        ->name('purchases.invoice')
+        ->middleware('role:admin,manager');
 
     // =======================
     // 🏦 Loans Management
@@ -116,7 +131,7 @@ Route::get('/stock-history/export/pdf', [StockMovementController::class, 'export
         ->middleware('role:admin,manager');
 
     // =======================
-    // 👤 User Profile (from Breeze)
+    // 👤 User Profile (Breeze)
     // =======================
     Route::get('/profile', [ProfileController::class, 'edit'])
         ->name('profile.edit');
@@ -129,6 +144,6 @@ Route::get('/stock-history/export/pdf', [StockMovementController::class, 'export
 });
 
 // ======================================================
-// 🔁 Auth Routes (Breeze-generated)
+// 🔁 Auth Routes (Breeze)
 // ======================================================
 require __DIR__.'/auth.php';

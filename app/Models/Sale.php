@@ -18,6 +18,7 @@ class Sale extends Model
         'method',
         'status',
         'notes',
+        'created_at',
     ];
 
     // 🧩 Relationships

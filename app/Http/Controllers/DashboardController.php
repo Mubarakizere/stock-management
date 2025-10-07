@@ -18,92 +18,141 @@ class DashboardController extends Controller
         $user = Auth::user();
         $role = strtolower($user->roleNames()[0] ?? 'guest');
 
-        /**
-         * Which sections should appear for this role?
-         * Adjust as needed.
-         */
+        // =========================
+        // Which sections each role sees
+        // =========================
         $sections = [
             'kpis'               => in_array($role, ['admin', 'manager']),
-            'finance'            => in_array($role, ['admin']),            // net balance, credits/debits
-            'loans'              => in_array($role, ['admin', 'manager']), // loans & payments
-            'charts'             => in_array($role, ['admin', 'manager']), // monthly trends
+            'finance'            => in_array($role, ['admin']),
+            'loans'              => in_array($role, ['admin', 'manager']),
+            'charts'             => in_array($role, ['admin', 'manager']),
             'recentTransactions' => in_array($role, ['admin', 'manager']),
-            'cashierDaily'       => in_array($role, ['cashier']),          // cashier-focused summary
+            'cashierDaily'       => in_array($role, ['cashier']),
         ];
 
-        // ---------- Common/time helpers ----------
-        $months = collect(range(5, 0))
-            ->map(fn ($i) => Carbon::now()->subMonths($i)->format('M Y'));
-
-        // Prepare payload with safe defaults
+        // =========================
+        // Safe defaults for all data
+        // =========================
         $payload = [
             'role'               => $role,
             'sections'           => $sections,
-            'months'             => $months,
+            'months'             => collect(),
             'salesTrend'         => [],
             'purchaseTrend'      => [],
             'recentTransactions' => collect(),
+
+            // Always defined numeric values
+            'totalSales'         => 0,
+            'totalPurchases'     => 0,
+            'totalCredits'       => 0,
+            'totalDebits'        => 0,
+            'netBalance'         => 0,
+            'totalLoansGiven'    => 0,
+            'totalLoansTaken'    => 0,
+            'activeLoans'        => 0,
+            'paidLoans'          => 0,
+            'totalLoanPayments'  => 0,
+            'todaySalesTotal'    => 0,
+            'myTodaySalesTotal'  => 0,
+            'myTodaySalesCount'  => 0,
+            'myLatestSales'      => collect(),
         ];
 
-        // ---------- Role: Cashier (focused, minimal, scoped to user) ----------
+        // =========================
+        // CASHIER DASHBOARD
+        // =========================
         if ($sections['cashierDaily']) {
             $payload['todaySalesTotal'] = Sale::whereDate('created_at', today())->sum('total_amount');
-            $payload['myTodaySalesTotal'] = Sale::whereDate('created_at', today())
-                ->where('user_id', $user->id)
+            $payload['myTodaySalesTotal'] = Sale::where('user_id', $user->id)
+                ->whereDate('created_at', today())
                 ->sum('total_amount');
-            $payload['myTodaySalesCount'] = Sale::whereDate('created_at', today())
-                ->where('user_id', $user->id)
+            $payload['myTodaySalesCount'] = Sale::where('user_id', $user->id)
+                ->whereDate('created_at', today())
                 ->count();
-
-            // Optionally a small list for quick view
             $payload['myLatestSales'] = Sale::where('user_id', $user->id)
                 ->latest()
                 ->take(10)
                 ->get();
 
-            // Cashier returns early with only what’s needed
             return view('dashboard.index', $payload);
         }
 
-        // ---------- Roles: Admin / Manager ----------
-        // KPIs (visible to admin, manager)
-        if ($sections['kpis']) {
-            $payload['totalSales']     = Sale::sum('total_amount');
-            $payload['totalPurchases'] = Purchase::sum('total_amount');
+        // =========================
+        // SHARED METRICS (ADMIN + MANAGER)
+        // =========================
+        $payload['months'] = collect(range(5, 0))
+            ->map(fn($i) => Carbon::now()->subMonths($i)->format('M Y'));
+
+        // Start base queries
+        $salesQuery     = Sale::query();
+        $purchaseQuery  = Purchase::query();
+        $loanQuery      = Loan::query();
+        $debitQuery     = DebitCredit::query();
+
+        // =========================
+        // Role-based data scoping
+        // =========================
+
+        if ($role === 'cashier') {
+            $salesQuery->where('user_id', $user->id);
+            $purchaseQuery->where('user_id', $user->id);
+            $loanQuery->where('user_id', $user->id);
+            $debitQuery->where('user_id', $user->id);
         }
 
-        // Finance block (admin only)
+        // Example: if you later add branch/team logic
+        // if ($role === 'manager' && method_exists($user, 'managedUsers')) {
+        //     $ids = $user->managedUsers->pluck('id');
+        //     $salesQuery->whereIn('user_id', $ids);
+        //     $purchaseQuery->whereIn('user_id', $ids);
+        //     $loanQuery->whereIn('user_id', $ids);
+        //     $debitQuery->whereIn('user_id', $ids);
+        // }
+
+        // =========================
+        // KPIs
+        // =========================
+        if ($sections['kpis']) {
+            $payload['totalSales']     = $salesQuery->sum('total_amount');
+            $payload['totalPurchases'] = $purchaseQuery->sum('total_amount');
+        }
+
+        // =========================
+        // Finance (Admin only)
+        // =========================
         if ($sections['finance']) {
             $payload['totalCredits'] = DebitCredit::where('type', 'credit')->sum('amount');
             $payload['totalDebits']  = DebitCredit::where('type', 'debit')->sum('amount');
-            $payload['netBalance']   = ($payload['totalCredits'] ?? 0) - ($payload['totalDebits'] ?? 0);
+            $payload['netBalance']   = $payload['totalCredits'] - $payload['totalDebits'];
         }
 
-        // Loans block (admin, manager)
+        // =========================
+        // Loans
+        // =========================
         if ($sections['loans']) {
-            $payload['totalLoansGiven']   = Loan::where('type', 'given')->sum('amount');
+            $payload['totalLoansGiven']   = $loanQuery->where('type', 'given')->sum('amount');
             $payload['totalLoansTaken']   = Loan::where('type', 'taken')->sum('amount');
-            $payload['activeLoans']       = Loan::where('status', 'pending')->count();
-            $payload['paidLoans']         = Loan::where('status', 'paid')->count();
+            $payload['activeLoans']       = $loanQuery->where('status', 'pending')->count();
+            $payload['paidLoans']         = $loanQuery->where('status', 'paid')->count();
             $payload['totalLoanPayments'] = LoanPayment::sum('amount');
         }
 
-        // Charts (admin, manager) — monthly trends last 6 months
+        // =========================
+        // Charts
+        // =========================
         if ($sections['charts']) {
             $salesTrend = [];
             $purchaseTrend = [];
 
-            foreach ($months as $m) {
+            foreach ($payload['months'] as $m) {
                 $dt = Carbon::createFromFormat('M Y', $m);
-                $yearNum  = $dt->year;
-                $monthNum = $dt->month;
-
-                $salesTrend[] = Sale::whereYear('created_at', $yearNum)
-                    ->whereMonth('created_at', $monthNum)
+                $salesTrend[] = (clone $salesQuery)
+                    ->whereYear('created_at', $dt->year)
+                    ->whereMonth('created_at', $dt->month)
                     ->sum('total_amount');
-
-                $purchaseTrend[] = Purchase::whereYear('created_at', $yearNum)
-                    ->whereMonth('created_at', $monthNum)
+                $purchaseTrend[] = (clone $purchaseQuery)
+                    ->whereYear('created_at', $dt->year)
+                    ->whereMonth('created_at', $dt->month)
                     ->sum('total_amount');
             }
 
@@ -111,14 +160,20 @@ class DashboardController extends Controller
             $payload['purchaseTrend'] = $purchaseTrend;
         }
 
-        // Recent transactions (admin, manager)
+        // =========================
+        // Recent Transactions
+        // =========================
         if ($sections['recentTransactions']) {
-            $payload['recentTransactions'] = DebitCredit::with(['customer', 'supplier', 'user'])
+            $payload['recentTransactions'] = $debitQuery
+                ->with(['customer', 'supplier', 'user'])
                 ->latest()
                 ->take(10)
                 ->get();
         }
 
+        // =========================
+        // Return the view
+        // =========================
         return view('dashboard.index', $payload);
     }
 }
