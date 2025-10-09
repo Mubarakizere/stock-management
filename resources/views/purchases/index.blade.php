@@ -4,18 +4,18 @@
 <div class="max-w-6xl mx-auto px-4">
     <div class="flex items-center justify-between mb-6">
         <h2 class="text-2xl font-bold">Purchases</h2>
-        <a href="{{ route('purchases.create') }}" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">New Purchase</a>
+        <a href="{{ route('purchases.create') }}" class="btn-primary">+ New Purchase</a>
     </div>
 
-    <div class="overflow-x-auto bg-white shadow rounded-lg">
-        <table class="w-full text-sm text-left border-collapse">
+    <div class="bg-white shadow rounded-lg overflow-x-auto">
+        <table class="w-full text-sm border-collapse">
             <thead class="bg-gray-100">
-                <tr>
-                    <th class="px-4 py-2 border">ID</th>
+                <tr class="text-gray-700">
+                    <th class="px-4 py-2 border">#</th>
                     <th class="px-4 py-2 border">Supplier</th>
                     <th class="px-4 py-2 border">Date</th>
-                    <th class="px-4 py-2 border">Total</th>
-                    <th class="px-4 py-2 border">Actions</th>
+                    <th class="px-4 py-2 border text-right">Total</th>
+                    <th class="px-4 py-2 border text-center">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -24,14 +24,17 @@
                     <td class="px-4 py-2 border">{{ $purchase->id }}</td>
                     <td class="px-4 py-2 border">{{ $purchase->supplier->name }}</td>
                     <td class="px-4 py-2 border">{{ $purchase->purchase_date }}</td>
-                    <td class="px-4 py-2 border">{{ number_format($purchase->total_amount, 2) }}</td>
-                    <td class="px-4 py-2 border flex gap-2">
-                        <a href="{{ route('purchases.show', $purchase->id) }}" class="px-2 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 text-xs">View</a>
-                        <a href="{{ route('purchases.edit', $purchase->id) }}" class="px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-xs">Edit</a>
-                        <form action="{{ route('purchases.destroy', $purchase->id) }}" method="POST" onsubmit="return confirm('Are you sure?');">
+                    <td class="px-4 py-2 border text-right text-green-700 font-medium">
+                        {{ number_format($purchase->total_amount, 2) }}
+                    </td>
+                    <td class="px-4 py-2 border text-center space-x-2">
+                        <a href="{{ route('purchases.show', $purchase->id) }}" class="btn-secondary text-xs">View</a>
+                        <a href="{{ route('purchases.edit', $purchase->id) }}" class="btn-warning text-xs">Edit</a>
+                        <form action="{{ route('purchases.destroy', $purchase->id) }}" method="POST" class="inline"
+                              onsubmit="return confirm('Are you sure?');">
                             @csrf
                             @method('DELETE')
-                            <button class="px-2 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-xs">Delete</button>
+                            <button type="submit" class="btn-danger text-xs">Delete</button>
                         </form>
                     </td>
                 </tr>
@@ -42,6 +45,10 @@
                 @endforelse
             </tbody>
         </table>
+    </div>
+
+    <div class="mt-4">
+        {{ $purchases->links() }}
     </div>
 </div>
 @endsection

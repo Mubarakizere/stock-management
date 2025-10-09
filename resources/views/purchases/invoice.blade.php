@@ -16,21 +16,21 @@
         th { background:#f3f4f6; text-align:left; }
         td.num, th.num { text-align:right; }
         .total-row td { font-weight:700; background:#f9fafb; }
+        .footer { display:flex; justify-content:space-between; margin-top:16px; color:#555; }
         .badge { display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px; }
         .badge-green { background:#dcfce7; color:#166534; }
         .badge-yellow { background:#fef9c3; color:#854d0e; }
         .badge-red { background:#fee2e2; color:#991b1b; }
-        .footer { display:flex; justify-content:space-between; margin-top:16px; color:#555; }
     </style>
 </head>
 <body>
 <div class="wrap">
 
-    {{-- HEADER: Company (no logo) + Invoice meta --}}
+    {{-- HEADER --}}
     <div class="row">
         <div class="col">
-            <div class="title">{{ config('company.name') }}</div>
-            <div>{{ config('company.address_line1') }}</div>
+            <div class="title">{{ config('company.name', 'Your Company') }}</div>
+            @if(config('company.address_line1'))<div>{{ config('company.address_line1') }}</div>@endif
             @if(config('company.address_line2'))<div>{{ config('company.address_line2') }}</div>@endif
             @if(config('company.phone'))<div>Phone: {{ config('company.phone') }}</div>@endif
             @if(config('company.email'))<div>Email: {{ config('company.email') }}</div>@endif
@@ -41,13 +41,11 @@
             <div>Invoice #: <strong>#{{ $purchase->id }}</strong></div>
             <div>Date: <strong>{{ $purchase->purchase_date }}</strong></div>
             <div>Recorded by: <strong>{{ $purchase->user->name ?? 'System' }}</strong></div>
-            <div>Status:
-                @php
-                    $status = $purchase->status ?? 'completed';
-                    $badge = $status === 'completed' ? 'badge-green' : ($status === 'pending' ? 'badge-yellow' : 'badge-red');
-                @endphp
-                <span class="badge {{ $badge }}">{{ ucfirst($status) }}</span>
-            </div>
+            @php
+                $status = $purchase->status ?? 'completed';
+                $badge = $status === 'completed' ? 'badge-green' : ($status === 'pending' ? 'badge-yellow' : 'badge-red');
+            @endphp
+            <div>Status: <span class="badge {{ $badge }}">{{ ucfirst($status) }}</span></div>
         </div>
     </div>
 
@@ -56,9 +54,10 @@
     {{-- SUPPLIER INFO --}}
     <div class="row">
         <div class="col">
-            <strong>Supplier</strong><br>
+            <strong>Supplier:</strong><br>
             {{ $purchase->supplier->name }}<br>
-            {{-- If you add supplier fields later, render them here (phone, address, etc.) --}}
+            @if(isset($purchase->supplier->phone))Phone: {{ $purchase->supplier->phone }}<br>@endif
+            @if(isset($purchase->supplier->email))Email: {{ $purchase->supplier->email }}<br>@endif
         </div>
         <div class="col" style="text-align:right;">
             @if($purchase->invoice_number)
@@ -85,19 +84,21 @@
                 <tr>
                     <td>{{ $item->product->name }}</td>
                     <td class="num">{{ number_format($item->quantity, 2) }}</td>
-                    <td class="num">{{ number_format($item->cost_price, 2) }}</td>
-                    <td class="num">{{ number_format($item->subtotal, 2) }}</td>
+                    <td class="num">{{ number_format($item->unit_cost, 2) }}</td>
+                    <td class="num">{{ number_format($item->total_cost, 2) }}</td>
                 </tr>
             @endforeach
         </tbody>
+
         @php
-            $subtotal = $purchase->subtotal ?? $purchase->items->sum('subtotal');
+            $subtotal = $purchase->subtotal ?? $purchase->items->sum('total_cost');
             $tax = $purchase->tax ?? 0;
             $discount = $purchase->discount ?? 0;
             $total = $purchase->total_amount ?? (($subtotal + $tax) - $discount);
             $paid = $purchase->amount_paid ?? 0;
             $balance = $total - $paid;
         @endphp
+
         <tfoot>
             <tr>
                 <td colspan="3" class="num muted">Subtotal</td>
@@ -137,7 +138,7 @@
     {{-- FOOTER --}}
     <div class="footer">
         <div>Generated on {{ now()->format('d M Y, H:i') }}</div>
-        <div>{{ config('company.name') }} • {{ config('company.email') }}</div>
+        <div>{{ config('company.name', 'Your Company') }} • {{ config('company.email', 'info@example.com') }}</div>
     </div>
 </div>
 </body>

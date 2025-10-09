@@ -1,165 +1,204 @@
 @extends('layouts.app')
+@section('title', 'New Sale')
 
 @section('content')
-<div class="max-w-5xl mx-auto px-4">
-    <h2 class="text-2xl font-bold mb-6">New Sale</h2>
+<div class="max-w-7xl mx-auto p-6 space-y-6">
 
-    <form method="POST" action="{{ route('sales.store') }}" data-offline-sync="sales" class="space-y-4">
-        @csrf
-        <input type="hidden" name="user_id" value="{{ Auth::id() }}">
+    <h1 class="text-2xl font-semibold text-gray-800 mb-4">New Sale</h1>
 
-        {{-- Customer --}}
-        <div>
-            <label class="block mb-1 font-medium">Customer (optional)</label>
-            <select name="customer_id" class="w-full border-gray-300 rounded-lg shadow-sm">
-                <option value="">-- Walk-in Customer --</option>
-                @foreach($customers as $customer)
-                    <option value="{{ $customer->id }}">{{ $customer->name }}</option>
+    {{-- 🔔 Display global errors or success messages --}}
+    @if (session('success'))
+        <div class="rounded-lg bg-green-50 border border-green-200 text-green-800 px-4 py-3">
+            {{ session('success') }}
+        </div>
+    @endif
+
+    @if ($errors->any())
+        <div class="rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-3 space-y-1">
+            <strong class="block font-semibold">⚠️ Error:</strong>
+            <ul class="list-disc pl-5 space-y-1 text-sm">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
                 @endforeach
-            </select>
+            </ul>
         </div>
+    @endif
 
-        {{-- Sale Date --}}
-        <div>
-            <label class="block mb-1 font-medium">Date</label>
-            <input type="date" name="sale_date" value="{{ date('Y-m-d') }}" class="w-full border-gray-300 rounded-lg shadow-sm" required>
-        </div>
+    <form action="{{ route('sales.store') }}" method="POST" x-data="saleForm()" x-init="init()">
+        @csrf
 
-        {{-- Products --}}
-        <h4 class="text-lg font-semibold mt-4">Products</h4>
-        <div id="product-rows" class="space-y-2">
-            <div class="flex gap-2 items-center">
-                <select name="products[0][product_id]" class="flex-1 border-gray-300 rounded-lg shadow-sm" required>
-                    <option value="">-- Select Product --</option>
-                    @foreach($products as $product)
-                        <option value="{{ $product->id }}">{{ $product->name }}</option>
+        {{-- Customer and sale info --}}
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Customer</label>
+                <select name="customer_id" class="mt-1 w-full rounded-lg border-gray-300">
+                    <option value="">Walk-in</option>
+                    @foreach ($customers as $c)
+                        <option value="{{ $c->id }}" @selected(old('customer_id') == $c->id)>
+                            {{ $c->name }}
+                        </option>
                     @endforeach
                 </select>
-                <input type="number" name="products[0][quantity]" class="w-24 border-gray-300 rounded-lg shadow-sm" placeholder="Qty" min="1" required>
-                <input type="number" step="0.01" name="products[0][unit_price]" class="w-32 border-gray-300 rounded-lg shadow-sm" placeholder="Unit Price" required>
-                <button type="button" class="remove-row text-red-500 hover:text-red-700 hidden">✖</button>
             </div>
-        </div>
 
-        <button type="button" id="addRow" class="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600">
-            Add Product
-        </button>
-
-        {{-- Payment Info --}}
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
             <div>
-                <label class="block mb-1 font-medium">Amount Paid</label>
-                <input type="number" step="0.01" name="amount_paid" class="w-full border-gray-300 rounded-lg shadow-sm" placeholder="0.00">
+                <label class="block text-sm font-medium text-gray-700">Sale Date</label>
+                <input type="date" name="sale_date"
+                    value="{{ old('sale_date', now()->format('Y-m-d')) }}"
+                    class="mt-1 w-full rounded-lg border-gray-300" required>
             </div>
+
             <div>
-                <label class="block mb-1 font-medium">Payment Method</label>
-                <select name="method" class="w-full border-gray-300 rounded-lg shadow-sm">
-                    <option value="cash">Cash</option>
-                    <option value="bank">Bank</option>
-                    <option value="momo">Mobile Money</option>
-                    <option value="card">Card</option>
-                </select>
+                <label class="block text-sm font-medium text-gray-700">Payment Method</label>
+                <input type="text" name="method"
+                    value="{{ old('method', 'cash') }}"
+                    class="mt-1 w-full rounded-lg border-gray-300"
+                    placeholder="cash / momo / bank">
             </div>
         </div>
 
-        {{-- Notes --}}
-        <div>
-            <label class="block mb-1 font-medium">Notes (optional)</label>
-            <textarea name="notes" rows="2" class="w-full border-gray-300 rounded-lg shadow-sm"></textarea>
+        {{-- Product items table --}}
+        <div class="bg-white shadow rounded-lg overflow-hidden mb-6">
+            <div class="px-4 py-3 border-b flex items-center justify-between">
+                <h3 class="font-medium text-gray-800">Products</h3>
+                <button type="button" class="btn btn-outline text-sm" @click="addLine()">+ Add Item</button>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+                            <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
+                            <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Unit Price</th>
+                            <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Subtotal</th>
+                            <th class="px-4 py-2"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        <template x-for="(row, idx) in lines" :key="row.key">
+                            <tr>
+                                <td class="px-4 py-2">
+                                    <select :name="`products[${idx}][product_id]`"
+                                        x-model.number="row.product_id"
+                                        @change="onProductChange(row, $event)"
+                                        class="w-full rounded-lg border-gray-300">
+                                        <option value="">Select product</option>
+                                        @foreach ($products as $p)
+                                            <option value="{{ $p->id }}" data-price="{{ $p->price }}">
+                                                {{ $p->name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                </td>
+                                <td class="px-4 py-2 text-right">
+                                    <input type="number" step="0.01" min="0.01"
+                                        class="w-24 rounded-lg border-gray-300 text-right"
+                                        x-model.number="row.quantity"
+                                        :name="`products[${idx}][quantity]`"
+                                        @input="recalc()">
+                                </td>
+                                <td class="px-4 py-2 text-right">
+                                    <input type="number" step="0.01" min="0"
+                                        class="w-28 rounded-lg border-gray-300 text-right"
+                                        x-model.number="row.unit_price"
+                                        :name="`products[${idx}][unit_price]`"
+                                        @input="recalc()">
+                                </td>
+                                <td class="px-4 py-2 text-right text-gray-800 font-medium">
+                                    <input type="hidden" :name="`products[${idx}][subtotal]`"
+                                        :value="(row.quantity * row.unit_price).toFixed(2)">
+                                    <span x-text="formatMoney(row.quantity * row.unit_price)"></span>
+                                </td>
+                                <td class="px-4 py-2 text-right">
+                                    <button type="button" class="btn btn-danger text-xs" @click="removeLine(idx)">
+                                        Remove
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
-        {{-- Buttons --}}
-        <div class="flex justify-between items-center mt-6">
-            <button type="submit" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
-                Save Sale
-            </button>
-            <a href="{{ route('sales.index') }}" class="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600">
-                Cancel
-            </a>
+        {{-- Payment + notes --}}
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+            <div class="md:col-span-2">
+                <label class="block text-sm font-medium text-gray-700">Notes</label>
+                <textarea name="notes" rows="3"
+                    class="mt-1 w-full rounded-lg border-gray-300"
+                    placeholder="Any remarks...">{{ old('notes') }}</textarea>
+            </div>
+
+            <div class="bg-white shadow rounded-lg p-4 space-y-3">
+                <div class="flex justify-between text-sm">
+                    <span>Subtotal</span>
+                    <span x-text="formatMoney(total)"></span>
+                </div>
+
+                <div class="flex justify-between text-sm">
+                    <label for="amount_paid">Amount Paid</label>
+                    <input type="number" step="0.01" min="0" id="amount_paid"
+                        name="amount_paid"
+                        value="{{ old('amount_paid', 0) }}"
+                        class="w-32 rounded-lg border-gray-300 text-right"
+                        x-model.number="paid"
+                        @input="recalc()">
+                </div>
+
+                <div class="flex justify-between font-semibold">
+                    <span>Balance</span>
+                    <span x-text="formatMoney(Math.max(total - paid, 0))"></span>
+                </div>
+
+                <div class="pt-2 flex gap-2">
+                    <button type="submit" class="btn btn-primary">Save Sale</button>
+                    <a href="{{ route('sales.index') }}" class="btn btn-secondary">Cancel</a>
+                </div>
+            </div>
         </div>
     </form>
 </div>
 
-{{-- 🔧 Dynamic Product Rows --}}
+{{-- AlpineJS --}}
 <script>
-    let rowCount = 1;
-    document.getElementById('addRow').addEventListener('click', function() {
-        const container = document.getElementById('product-rows');
-        const newRow = `
-            <div class="flex gap-2 items-center mt-2">
-                <select name="products[${rowCount}][product_id]" class="flex-1 border-gray-300 rounded-lg shadow-sm" required>
-                    <option value="">-- Select Product --</option>
-                    @foreach($products as $product)
-                        <option value="{{ $product->id }}">{{ $product->name }}</option>
-                    @endforeach
-                </select>
-                <input type="number" name="products[${rowCount}][quantity]" class="w-24 border-gray-300 rounded-lg shadow-sm" placeholder="Qty" min="1" required>
-                <input type="number" step="0.01" name="products[${rowCount}][unit_price]" class="w-32 border-gray-300 rounded-lg shadow-sm" placeholder="Unit Price" required>
-                <button type="button" class="remove-row text-red-500 hover:text-red-700">✖</button>
-            </div>`;
-        container.insertAdjacentHTML('beforeend', newRow);
-        rowCount++;
-    });
-
-    document.addEventListener('click', function(e) {
-        if (e.target.classList.contains('remove-row')) e.target.parentElement.remove();
-    });
-</script>
-
-{{-- 🛰️ Offline Support for Sales Form --}}
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-  const form = document.querySelector('form[data-offline-sync="sales"]');
-  if (!form) return;
-
-  form.addEventListener('submit', async (e) => {
-    if (navigator.onLine) return; // normal submit if online
-
-    e.preventDefault();
-
-    const fd = new FormData(form);
-    const sale = {
-      customer_id: fd.get('customer_id') || null,
-      user_id: fd.get('user_id') || (window.App && window.App.userId) || null,
-      total_amount: Number(fd.get('amount_paid') || 0),
-      created_at: new Date().toISOString(),
-    };
-
-    const openDB = (name, ver) => new Promise((res, rej) => {
-      const req = indexedDB.open(name, ver);
-      req.onsuccess = () => res(req.result);
-      req.onerror = rej;
-      req.onupgradeneeded = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains('offline_sales')) {
-          db.createObjectStore('offline_sales', { keyPath: 'id', autoIncrement: true });
+function saleForm(){
+    return {
+        lines: [],
+        total: 0,
+        paid: Number('{{ old('amount_paid', 0) }}'),
+        init(){
+            this.addLine();
+            this.recalc();
+        },
+        addLine(){
+            this.lines.push({
+                key: crypto.randomUUID?.() || (Date.now() + Math.random()),
+                product_id: '',
+                quantity: 1,
+                unit_price: 0
+            });
+        },
+        removeLine(i){
+            this.lines.splice(i,1);
+            this.recalc();
+        },
+        onProductChange(row, event){
+            const select = event.target;
+            const price = Number(select.options[select.selectedIndex]?.dataset?.price || 0);
+            if(price > 0 && (!row.unit_price || row.unit_price === 0)){
+                row.unit_price = price;
+            }
+            this.recalc();
+        },
+        recalc(){
+            this.total = this.lines.reduce((sum, r) => sum + (Number(r.quantity) * Number(r.unit_price)), 0);
+        },
+        formatMoney(v){
+            return Number(v || 0).toFixed(2);
         }
-      };
-    });
-
-    const db = await openDB('StockManagerDB', 1);
-    const tx = db.transaction('offline_sales', 'readwrite');
-    tx.objectStore('offline_sales').add(sale);
-    tx.oncomplete = async () => {
-      // background sync registration
-      if (navigator.serviceWorker && navigator.serviceWorker.ready) {
-        const reg = await navigator.serviceWorker.ready;
-        if ('sync' in reg) {
-          try { await reg.sync.register('sync-offline-sales'); } catch (_) {}
-        }
-      }
-
-      Swal.fire({
-        icon: 'success',
-        title: 'Saved Offline!',
-        text: 'This sale will sync automatically when you’re online.',
-        confirmButtonColor: '#4f46e5'
-      });
-
-      form.reset();
-    };
-  });
-});
+    }
+}
 </script>
 @endsection

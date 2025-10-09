@@ -15,11 +15,22 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\StockMovementController;
 use App\Http\Controllers\Auth\RoleRedirectController;
 
+/*
+|--------------------------------------------------------------------------
+| 🌐 Web Routes
+|--------------------------------------------------------------------------
+| Defines all web-accessible routes for the application.
+| Includes authentication, role-based access, and dashboard modules.
+|--------------------------------------------------------------------------
+*/
+
 // ======================================================
-// 🔐 Redirect Root to Login
+// 🏠 Root Redirect Logic
 // ======================================================
 Route::get('/', function () {
-    return redirect()->route('login');
+    return auth()->check()
+        ? redirect()->route('dashboard')
+        : redirect()->route('login');
 });
 
 // ======================================================
@@ -30,7 +41,7 @@ Route::get('/redirect-by-role', RoleRedirectController::class)
     ->name('redirect.by.role');
 
 // ======================================================
-// 🔐 Authenticated Routes (Protected by Auth & Verified)
+// 🔐 Authenticated & Verified Routes
 // ======================================================
 Route::middleware(['auth', 'verified'])->group(function () {
 
@@ -42,46 +53,44 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('role:admin,manager,cashier');
 
     // =======================
-    // 👥 Users (Admin only)
+    // 👥 User Management (Admin only)
     // =======================
     Route::middleware('role:admin')->group(function () {
         Route::get('/users', function () {
-            return view('users.index'); // simple placeholder
+            return view('users.index');
         })->name('users.index');
     });
 
     // =======================
-    // 🧾 Finance & Operations
+    // 🧾 Finance & Debits / Credits
     // =======================
-    Route::resource('debit-credits', DebitCreditController::class)
+    Route::resource('debits-credits', DebitCreditController::class)
         ->middleware('role:admin,manager,cashier');
 
-    Route::get('/transactions', [TransactionController::class, 'index'])
-        ->name('transactions.index')
-        ->middleware('role:admin,manager');
+    // =======================
+    // 💳 Transactions
+    // =======================
+    Route::middleware(['role:admin,manager'])->group(function () {
+        Route::get('/transactions', [TransactionController::class, 'index'])->name('transactions.index');
+        Route::get('/transactions/create', [TransactionController::class, 'create'])->name('transactions.create');
+        Route::post('/transactions', [TransactionController::class, 'store'])->name('transactions.store');
+        Route::get('/transactions/{transaction}', [TransactionController::class, 'show'])->name('transactions.show');
+        Route::get('/transactions/{transaction}/edit', [TransactionController::class, 'edit'])->name('transactions.edit');
+        Route::put('/transactions/{transaction}', [TransactionController::class, 'update'])->name('transactions.update');
+        Route::delete('/transactions/{transaction}', [TransactionController::class, 'destroy'])->name('transactions.destroy');
 
-    Route::get('/transactions/export/csv', [TransactionController::class, 'exportCsv'])
-        ->name('transactions.export.csv')
-        ->middleware('role:admin,manager');
-
-    Route::get('/transactions/export/pdf', [TransactionController::class, 'exportPdf'])
-        ->name('transactions.export.pdf')
-        ->middleware('role:admin,manager');
+        // Export routes
+        Route::get('/transactions/export/csv', [TransactionController::class, 'exportCsv'])->name('transactions.export.csv');
+        Route::get('/transactions/export/pdf', [TransactionController::class, 'exportPdf'])->name('transactions.export.pdf');
+    });
 
     // =======================
-    // 📦 Stock Management
+    // 📦 Inventory Management
     // =======================
-    Route::resource('categories', CategoryController::class)
-        ->middleware('role:admin,manager');
-
-    Route::resource('products', ProductController::class)
-        ->middleware('role:admin,manager,cashier');
-
-    Route::resource('suppliers', SupplierController::class)
-        ->middleware('role:admin,manager');
-
-    Route::resource('customers', CustomerController::class)
-        ->middleware('role:admin,manager,cashier');
+    Route::resource('categories', CategoryController::class)->middleware('role:admin,manager');
+    Route::resource('products', ProductController::class)->middleware('role:admin,manager,cashier');
+    Route::resource('suppliers', SupplierController::class)->middleware('role:admin,manager');
+    Route::resource('customers', CustomerController::class)->middleware('role:admin,manager,cashier');
 
     // =======================
     // 📊 Stock Movements
@@ -97,23 +106,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/stock-history/export/pdf', [StockMovementController::class, 'exportPdf'])
         ->name('stock.history.export.pdf')
         ->middleware('role:admin,manager');
-    // =======================
-// 📈 Reports (Admin only)
-// =======================
-Route::middleware('role:admin')->group(function () {
-    Route::get('/reports', function () {
-        return view('reports.index');
-    })->name('reports.index');
-});
 
     // =======================
-    // 💰 Sales & Purchases
+    // 💰 Purchases & Sales
     // =======================
-    Route::resource('purchases', PurchaseController::class)
-        ->middleware('role:admin,manager');
-
-    Route::resource('sales', SaleController::class)
-        ->middleware('role:admin,manager,cashier');
+    Route::resource('purchases', PurchaseController::class)->middleware('role:admin,manager');
+    Route::resource('sales', SaleController::class)->middleware('role:admin,manager,cashier');
 
     // 🧾 Invoices
     Route::get('/sales/{sale}/invoice', [SaleController::class, 'invoice'])
@@ -127,23 +125,24 @@ Route::middleware('role:admin')->group(function () {
     // =======================
     // 🏦 Loans Management
     // =======================
-    Route::resource('loans', LoanController::class)
-        ->middleware('role:admin,manager');
+    Route::resource('loans', LoanController::class)->middleware('role:admin,manager');
+
+    // =======================
+    // 📈 Reports (Admin only)
+    // =======================
+    Route::middleware('role:admin')->group(function () {
+        Route::get('/reports', fn() => view('reports.index'))->name('reports.index');
+    });
 
     // =======================
     // 👤 User Profile (Breeze)
     // =======================
-    Route::get('/profile', [ProfileController::class, 'edit'])
-        ->name('profile.edit');
-
-    Route::patch('/profile', [ProfileController::class, 'update'])
-        ->name('profile.update');
-
-    Route::delete('/profile', [ProfileController::class, 'destroy'])
-        ->name('profile.destroy');
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
 // ======================================================
-// 🔁 Auth Routes (Breeze)
+// 🔁 Auth Routes (Laravel Breeze)
 // ======================================================
-require __DIR__.'/auth.php';
+require __DIR__ . '/auth.php';

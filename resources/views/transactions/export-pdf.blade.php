@@ -6,7 +6,7 @@
     <style>
         body { font-family: DejaVu Sans, sans-serif; font-size: 12px; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+        th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
         th { background-color: #f5f5f5; }
     </style>
 </head>
@@ -15,14 +15,8 @@
     <table>
         <thead>
             <tr>
-                <th>Date</th>
-                <th>Type</th>
-                <th>Amount</th>
-                <th>Method</th>
-                <th>User</th>
-                <th>Customer</th>
-                <th>Supplier</th>
-                <th>Notes</th>
+                <th>Date</th><th>Type</th><th>Amount</th><th>Method</th>
+                <th>User</th><th>Customer</th><th>Supplier</th><th>Notes</th>
             </tr>
         </thead>
         <tbody>

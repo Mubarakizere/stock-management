@@ -7,18 +7,15 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, HasRoles;
 
-    /** @var list<string> */
-    protected $fillable = ['name','email','password'];
+    protected $fillable = ['name', 'email', 'password'];
+    protected $hidden = ['password', 'remember_token'];
 
-    /** @var list<string> */
-    protected $hidden = ['password','remember_token'];
-
-    /** @return array<string,string> */
     protected function casts(): array
     {
         return [
@@ -35,17 +32,15 @@ class User extends Authenticatable
 
     public function roles(): BelongsToMany
     {
-        // Pivot is role_user (role_id, user_id)
         return $this->belongsToMany(Role::class, 'role_user', 'user_id', 'role_id');
     }
 
-    // Helpers
+    // Helper fallback (optional)
     public function roleNames(): array
     {
         try {
             return $this->roles()->pluck('name')->toArray();
         } catch (\Throwable $e) {
-            // Fallback to users.role column if you use it
             return $this->role ? [$this->role] : [];
         }
     }

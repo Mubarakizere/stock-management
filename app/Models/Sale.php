@@ -18,7 +18,13 @@ class Sale extends Model
         'method',
         'status',
         'notes',
-        'created_at',
+    ];
+
+    // ✅ Date casting
+    protected $casts = [
+        'sale_date'  => 'date',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
 
     // 🧩 Relationships

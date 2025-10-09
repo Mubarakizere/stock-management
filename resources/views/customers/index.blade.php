@@ -2,45 +2,55 @@
 
 @section('content')
 <div class="flex justify-between items-center mb-4">
-    <h2 class="text-2xl font-bold">Customers</h2>
-    <a href="{{ route('customers.create') }}" class="px-4 py-2 bg-indigo-600 text-white rounded">+ Add Customer</a>
+    <h1 class="text-xl font-semibold text-gray-800">Customers</h1>
+    <a href="{{ route('customers.create') }}" class="btn btn-primary">+ Add Customer</a>
 </div>
 
 @if(session('success'))
-    <div class="mb-4 p-3 bg-green-100 text-green-700 rounded">
+    <div class="mb-4 p-3 rounded bg-green-100 text-green-700 text-sm">
         {{ session('success') }}
     </div>
 @endif
 
-<table class="w-full bg-white shadow rounded">
-    <thead>
-        <tr class="bg-gray-100">
-            <th class="p-2">Name</th>
-            <th class="p-2">Email</th>
-            <th class="p-2">Phone</th>
-            <th class="p-2">Address</th>
-            <th class="p-2">Actions</th>
-        </tr>
-    </thead>
-    <tbody>
-        @forelse($customers as $customer)
-            <tr class="border-t">
-                <td class="p-2">{{ $customer->name }}</td>
-                <td class="p-2">{{ $customer->email }}</td>
-                <td class="p-2">{{ $customer->phone }}</td>
-                <td class="p-2">{{ $customer->address }}</td>
-                <td class="p-2">
-                    <a href="{{ route('customers.edit', $customer) }}" class="px-3 py-1 bg-yellow-500 text-white rounded">Edit</a>
-                    <form action="{{ route('customers.destroy', $customer) }}" method="POST" class="inline">
-                        @csrf
-                        @method('DELETE')
-                        <button type="submit" onclick="return confirm('Are you sure?')" class="px-3 py-1 bg-red-600 text-white rounded">Delete</button>
-                    </form>
-                </td>
-            </tr>
-        @empty
-            <tr><td colspan="5" class="p-3 text-center text-gray-500">No customers yet.</td></tr>
-        @endforelse
-    </tbody>
-</table>
+<div class="card">
+    <div class="table-wrapper">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Address</th>
+                    <th class="text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse($customers as $customer)
+                    <tr>
+                        <td>{{ $customer->name }}</td>
+                        <td>{{ $customer->email ?? '—' }}</td>
+                        <td>{{ $customer->phone ?? '—' }}</td>
+                        <td>{{ $customer->address ?? '—' }}</td>
+                        <td class="text-right">
+                            <div class="table-actions">
+                                <a href="{{ route('customers.edit', $customer) }}" class="btn-table btn-table-edit">Edit</a>
+                                <form action="{{ route('customers.destroy', $customer) }}" method="POST" class="inline">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" onclick="return confirm('Are you sure?')" class="btn-table btn-table-delete">
+                                        Delete
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="5" class="table-empty">No customers found.</td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+</div>
 @endsection
