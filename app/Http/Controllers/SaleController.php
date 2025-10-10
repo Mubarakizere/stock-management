@@ -8,7 +8,8 @@ use App\Models\{
     Product,
     Customer,
     Transaction,
-    StockMovement
+    StockMovement,
+    Loan
 };
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -44,19 +45,15 @@ class SaleController extends Controller
 
     /**
      * Store a newly created sale in storage.
+     * Automatically creates a Loan if customer underpays.
      */
     public function store(Request $request)
     {
-        Log::info('Starting sale creation...', ['user' => Auth::id(), 'payload' => $request->all()]);
+        Log::info('🧾 Starting sale creation...', ['user' => Auth::id(), 'payload' => $request->all()]);
 
-        // 🧹 Clean empty product rows before validating
+        // 🧹 Clean product rows
         $products = collect($request->input('products', []))
-            ->filter(fn($p) =>
-                !empty($p['product_id']) &&
-                isset($p['quantity']) &&
-                isset($p['unit_price']) &&
-                floatval($p['quantity']) > 0
-            )
+            ->filter(fn($p) => !empty($p['product_id']) && floatval($p['quantity']) > 0)
             ->values()
             ->toArray();
 
@@ -76,9 +73,8 @@ class SaleController extends Controller
 
         try {
             DB::beginTransaction();
-            Log::info('Transaction started');
 
-            // Create the sale
+            // 1️⃣ Create Sale shell
             $sale = Sale::create([
                 'customer_id'  => $request->customer_id,
                 'user_id'      => Auth::id(),
@@ -90,11 +86,10 @@ class SaleController extends Controller
                 'notes'        => $request->notes,
             ]);
 
-            Log::info('Sale created', ['sale_id' => $sale->id]);
-
             $totalAmount = 0;
             $totalProfit = 0;
 
+            // 2️⃣ Loop through products
             foreach ($request->products as $item) {
                 $product = Product::whereKey($item['product_id'])->lockForUpdate()->firstOrFail();
 
@@ -119,25 +114,27 @@ class SaleController extends Controller
                 ]);
 
                 StockMovement::create([
-                    'product_id' => $product->id,
-                    'type'       => 'out',
-                    'quantity'   => $qty,
-                    'unit_cost'  => $cost,
-                    'total_cost' => round($cost * $qty, 2),
-                    'source_type'=> Sale::class,
-                    'source_id'  => $sale->id,
-                    'user_id'    => Auth::id(),
+                    'product_id'  => $product->id,
+                    'type'        => 'out',
+                    'quantity'    => $qty,
+                    'unit_cost'   => $cost,
+                    'total_cost'  => round($cost * $qty, 2),
+                    'source_type' => Sale::class,
+                    'source_id'   => $sale->id,
+                    'user_id'     => Auth::id(),
                 ]);
 
                 $totalAmount += $subtotal;
                 $totalProfit += $profit;
             }
 
+            // 3️⃣ Update totals and status
             $sale->update([
                 'total_amount' => $totalAmount,
                 'status'       => ($totalAmount <= ($sale->amount_paid ?? 0)) ? 'completed' : 'pending',
             ]);
 
+            // 4️⃣ Record payment transaction (if any)
             if ($sale->amount_paid > 0) {
                 Transaction::create([
                     'type'        => 'credit',
@@ -150,13 +147,27 @@ class SaleController extends Controller
                 ]);
             }
 
+            // 5️⃣ Auto-create Loan if unpaid balance remains
+            $balance = $totalAmount - ($sale->amount_paid ?? 0);
+            if ($balance > 0) {
+                Loan::create([
+                    'type'         => 'given',
+                    'customer_id'  => $sale->customer_id,
+                    'amount'       => $balance,
+                    'loan_date'    => $sale->sale_date,
+                    'status'       => 'pending',
+                    'notes'        => "Auto-created for Sale #{$sale->id} (Unpaid balance)",
+                ]);
+                Log::info('💳 Loan auto-created for partial sale', ['sale_id' => $sale->id, 'balance' => $balance]);
+            }
+
             DB::commit();
-            Log::info('Sale stored successfully', ['sale_id' => $sale->id]);
+            Log::info('✅ Sale stored successfully', ['sale_id' => $sale->id]);
 
             return redirect()->route('sales.index')->with('success', 'Sale recorded successfully.');
         } catch (\Throwable $e) {
             DB::rollBack();
-            Log::error('Sale creation failed', [
+            Log::error('❌ Sale creation failed', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
@@ -176,7 +187,7 @@ class SaleController extends Controller
     }
 
     /**
-     * Show the form for editing an existing sale.
+     * Edit a sale.
      */
     public function edit(Sale $sale)
     {
@@ -188,20 +199,15 @@ class SaleController extends Controller
     }
 
     /**
-     * Update a sale.
+     * Update a sale and regenerate loan if needed.
      */
     public function update(Request $request, Sale $sale)
     {
         Log::info('Updating sale', ['sale_id' => $sale->id, 'user' => Auth::id()]);
 
-        // 🧹 Clean empty product rows before validating
+        // 🧹 Clean product rows
         $products = collect($request->input('products', []))
-            ->filter(fn($p) =>
-                !empty($p['product_id']) &&
-                isset($p['quantity']) &&
-                isset($p['unit_price']) &&
-                floatval($p['quantity']) > 0
-            )
+            ->filter(fn($p) => !empty($p['product_id']) && floatval($p['quantity']) > 0)
             ->values()
             ->toArray();
 
@@ -222,6 +228,7 @@ class SaleController extends Controller
         try {
             DB::beginTransaction();
 
+            // Remove previous stock + items
             StockMovement::where('source_type', Sale::class)
                 ->where('source_id', $sale->id)
                 ->delete();
@@ -231,11 +238,7 @@ class SaleController extends Controller
             $totalProfit = 0;
 
             foreach ($request->products as $item) {
-                $product = Product::whereKey($item['product_id'])->lockForUpdate()->firstOrFail();
-
-                if (method_exists($product, 'currentStock') && $product->currentStock() < $item['quantity']) {
-                    throw new \Exception("Not enough stock for {$product->name}");
-                }
+                $product = Product::findOrFail($item['product_id']);
 
                 $qty       = (float) $item['quantity'];
                 $unitPrice = (float) $item['unit_price'];
@@ -254,20 +257,21 @@ class SaleController extends Controller
                 ]);
 
                 StockMovement::create([
-                    'product_id' => $product->id,
-                    'type'       => 'out',
-                    'quantity'   => $qty,
-                    'unit_cost'  => $cost,
-                    'total_cost' => round($cost * $qty, 2),
-                    'source_type'=> Sale::class,
-                    'source_id'  => $sale->id,
-                    'user_id'    => Auth::id(),
+                    'product_id'  => $product->id,
+                    'type'        => 'out',
+                    'quantity'    => $qty,
+                    'unit_cost'   => $cost,
+                    'total_cost'  => round($cost * $qty, 2),
+                    'source_type' => Sale::class,
+                    'source_id'   => $sale->id,
+                    'user_id'     => Auth::id(),
                 ]);
 
                 $totalAmount += $subtotal;
                 $totalProfit += $profit;
             }
 
+            // Update sale
             $sale->update([
                 'customer_id'  => $request->customer_id,
                 'sale_date'    => $request->sale_date,
@@ -278,6 +282,7 @@ class SaleController extends Controller
                 'notes'        => $request->notes,
             ]);
 
+            // Update or delete transaction
             if ($sale->amount_paid > 0) {
                 Transaction::updateOrCreate(
                     ['sale_id' => $sale->id],
@@ -294,20 +299,31 @@ class SaleController extends Controller
                 Transaction::where('sale_id', $sale->id)->delete();
             }
 
+            // 🔁 Update or create loan for remaining balance
+            $balance = $totalAmount - ($sale->amount_paid ?? 0);
+            if ($balance > 0) {
+                Loan::updateOrCreate(
+                    ['notes' => "Auto-created for Sale #{$sale->id} (Unpaid balance)"],
+                    [
+                        'type'         => 'given',
+                        'customer_id'  => $sale->customer_id,
+                        'amount'       => $balance,
+                        'loan_date'    => $sale->sale_date,
+                        'status'       => 'pending',
+                    ]
+                );
+            } else {
+                Loan::where('notes', "Auto-created for Sale #{$sale->id} (Unpaid balance)")->delete();
+            }
+
             DB::commit();
-            Log::info('Sale updated successfully', ['sale_id' => $sale->id]);
+            Log::info('✅ Sale updated successfully', ['sale_id' => $sale->id]);
 
             return redirect()->route('sales.show', $sale->id)->with('success', 'Sale updated successfully.');
         } catch (\Throwable $e) {
             DB::rollBack();
-            Log::error('Sale update failed', [
-                'sale_id' => $sale->id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-
-            return back()->withErrors(['error' => 'Failed to update sale: ' . $e->getMessage()])
-                         ->withInput();
+            Log::error('❌ Sale update failed', ['error' => $e->getMessage()]);
+            return back()->withErrors(['error' => 'Failed to update sale: ' . $e->getMessage()]);
         }
     }
 
@@ -324,6 +340,7 @@ class SaleController extends Controller
                 ->delete();
 
             Transaction::where('sale_id', $sale->id)->delete();
+            Loan::where('notes', "Auto-created for Sale #{$sale->id} (Unpaid balance)")->delete();
             $sale->items()->delete();
             $sale->delete();
         });

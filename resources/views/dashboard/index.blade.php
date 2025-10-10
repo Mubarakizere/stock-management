@@ -2,12 +2,12 @@
     <x-slot name="header">
         @php
             $roleColors = [
-                'admin' => 'bg-indigo-600',
+                'admin'   => 'bg-indigo-600',
                 'manager' => 'bg-green-600',
                 'cashier' => 'bg-yellow-500',
             ];
             $titles = [
-                'admin' => 'Business Dashboard',
+                'admin'   => 'Business Dashboard',
                 'manager' => 'Management Dashboard',
                 'cashier' => 'Daily Sales Dashboard',
             ];
@@ -27,28 +27,18 @@
         @if($sections['kpis'] ?? false)
         <section>
             <h3 class="text-lg font-semibold text-indigo-600 mb-4">Key Performance Indicators</h3>
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 <x-stat label="Total Sales" :value="$totalSales" />
+                <x-stat label="Total Profit" :value="$totalProfit" color="text-green-600" />
+                <x-stat label="Pending Balances" :value="$pendingBalances" color="text-red-600" />
                 <x-stat label="Total Purchases" :value="$totalPurchases" />
                 @if($sections['finance'])
-                    <x-stat label="Credits (Money In)" :value="$totalCredits" />
-                    <x-stat label="Debits (Money Out)" :value="$totalDebits" />
-                    <x-stat label="Net Balance" :value="$netBalance" color="{{ $netBalance >= 0 ? 'text-green-600' : 'text-red-600' }}" />
+                    <x-stat label="Credits (In)" :value="$totalCredits" />
+                    <x-stat label="Debits (Out)" :value="$totalDebits" />
+                    <x-stat label="Net Balance"
+                            :value="$netBalance"
+                            color="{{ $netBalance >= 0 ? 'text-green-600' : 'text-red-600' }}" />
                 @endif
-            </div>
-        </section>
-        @endif
-
-        {{-- 💰 Loans --}}
-        @if($sections['loans'] ?? false)
-        <section>
-            <h3 class="text-lg font-semibold text-indigo-600 mb-4">Loans Overview</h3>
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                <x-stat label="Loans Given" :value="$totalLoansGiven" />
-                <x-stat label="Loans Taken" :value="$totalLoansTaken" />
-                <x-stat label="Active Loans" :value="$activeLoans" />
-                <x-stat label="Paid Loans" :value="$paidLoans" />
-                <x-stat label="Total Loan Payments" :value="$totalLoanPayments" />
             </div>
         </section>
         @endif
@@ -56,164 +46,194 @@
         {{-- 📈 Charts --}}
         @if($sections['charts'] ?? false)
         <section>
-            <h3 class="text-lg font-semibold text-indigo-600 mb-4">Sales & Purchases (Last 6 Months)</h3>
-            <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-                <canvas id="salesChart" height="120"></canvas>
+            <h3 class="text-lg font-semibold text-indigo-600 mb-4">Sales Performance</h3>
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 space-y-10">
+                <canvas id="trendChart" height="120"></canvas>
+
+                <div class="mt-10">
+                    <h4 class="text-md font-semibold text-gray-700 mb-3">Sales (Last 30 Days)</h4>
+                    <canvas id="salesChart" height="100"></canvas>
+                </div>
             </div>
         </section>
         @endif
 
-        {{-- 🧾 Recent Transactions --}}
-        @if($sections['recentTransactions'] ?? false)
+        {{-- 🧠 Advanced Insights --}}
+        @if($sections['insights'] ?? false)
         <section>
-            <h3 class="text-lg font-semibold text-indigo-600 mb-4">Recent Financial Transactions</h3>
-            <div class="bg-white rounded-xl shadow overflow-x-auto">
-                <table class="w-full text-sm text-left border-collapse">
-                    <thead class="bg-gray-100 text-gray-700">
-                        <tr>
-                            <th class="px-4 py-2">User</th>
-                            <th class="px-4 py-2">Type</th>
-                            <th class="px-4 py-2 text-right">Amount</th>
-                            <th class="px-4 py-2">Customer</th>
-                            <th class="px-4 py-2">Supplier</th>
-                            <th class="px-4 py-2">Date</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse($recentTransactions as $t)
-                            <tr class="border-t hover:bg-gray-50">
-                                <td class="px-4 py-2">{{ $t->user->name ?? 'N/A' }}</td>
-                                <td class="px-4 py-2">
-                                    <span class="px-2 py-1 text-xs rounded font-semibold
-                                        {{ $t->type == 'debit' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700' }}">
-                                        {{ ucfirst($t->type) }}
-                                    </span>
-                                </td>
-                                <td class="px-4 py-2 text-right font-semibold">{{ number_format($t->amount, 2) }}</td>
-                                <td class="px-4 py-2">{{ $t->customer->name ?? '-' }}</td>
-                                <td class="px-4 py-2">{{ $t->supplier->name ?? '-' }}</td>
-                                <td class="px-4 py-2">{{ $t->created_at->format('d M Y') }}</td>
+            <h3 class="text-lg font-semibold text-indigo-600 mb-4">Advanced Insights</h3>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                {{-- 🥇 Top Products Table & Chart --}}
+                <div class="bg-white rounded-xl shadow p-5 border border-gray-100 space-y-5">
+                    <h4 class="text-md font-semibold text-gray-700 flex items-center">
+                        <x-lucide-trophy class="w-5 h-5 text-yellow-500 mr-2" /> Top 5 Selling Products
+                    </h4>
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-gray-100 text-gray-700">
+                            <tr>
+                                <th class="px-4 py-2">Product</th>
+                                <th class="px-4 py-2 text-right">Qty Sold</th>
+                                <th class="px-4 py-2 text-right">Revenue</th>
                             </tr>
-                        @empty
-                            <tr><td colspan="6" class="text-center py-3 text-gray-500">No recent transactions</td></tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </section>
-        @endif
-
-        {{-- 💼 Cashier --}}
-        @if($sections['cashierDaily'] ?? false)
-        <section>
-            <h3 class="text-lg font-semibold text-indigo-600 mb-4">Today’s Performance</h3>
-            <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-                <x-stat label="All Sales Today" :value="$todaySalesTotal" />
-                <x-stat label="My Sales Total" :value="$myTodaySalesTotal" />
-                <x-stat label="My Sales Count" :value="$myTodaySalesCount" />
-            </div>
-
-            <h3 class="text-lg font-semibold text-indigo-600 mb-4">My Latest Sales</h3>
-            <div class="bg-white rounded-xl shadow overflow-x-auto">
-                <table class="w-full text-sm text-left">
-                    <thead class="bg-gray-100 text-gray-700">
-                        <tr>
-                            <th class="px-4 py-2">Customer</th>
-                            <th class="px-4 py-2 text-right">Amount</th>
-                            <th class="px-4 py-2">Date</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse($myLatestSales as $sale)
-                            <tr class="border-t hover:bg-gray-50">
-                                <td class="px-4 py-2">{{ $sale->customer->name ?? 'Walk-in' }}</td>
-                                <td class="px-4 py-2 text-right">{{ number_format($sale->total_amount, 2) }}</td>
-                                <td class="px-4 py-2">{{ $sale->created_at->format('d M Y') }}</td>
-                            </tr>
-                        @empty
-                            <tr><td colspan="3" class="text-center py-3 text-gray-500">No sales today</td></tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-        </section>
-        @endif
-
-        {{-- 📱 PWA Install Banner --}}
-        @if($sections['pwaBanner'] ?? false)
-        <section class="mt-12">
-            <div class="bg-gradient-to-r from-indigo-900 via-purple-900 to-gray-800 text-white rounded-2xl p-8 shadow-lg flex flex-col md:flex-row items-center justify-between">
-                <div class="mb-6 md:mb-0">
-                    <h3 class="text-2xl font-semibold mb-2">Stock Manager App</h3>
-                    <p class="text-gray-200">Install our Progressive Web App for a faster, full-screen experience on iOS or Android.</p>
+                        </thead>
+                        <tbody>
+                            @forelse($topProducts as $p)
+                                <tr class="border-t hover:bg-gray-50">
+                                    <td class="px-4 py-2">{{ $p->product->name ?? 'Unknown' }}</td>
+                                    <td class="px-4 py-2 text-right">{{ number_format($p->total_qty, 2) }}</td>
+                                    <td class="px-4 py-2 text-right text-green-600 font-semibold">
+                                        {{ number_format($p->total_revenue, 2) }}
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="3" class="text-center py-3 text-gray-500">No sales data yet</td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                    <div class="mt-4">
+                        <canvas id="topProductsChart" height="140"></canvas>
+                    </div>
                 </div>
 
-                {{-- Install PWA Button --}}
-                <button id="installPWA"
-                        class="hidden inline-flex items-center bg-white text-gray-900 px-5 py-3 rounded-xl font-semibold hover:bg-gray-100 transition">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 2a10 10 0 1010 10A10.011 10.011 0 0012 2zm1 14.59V8h-2v8.59L7.41 12 6 13.41 12 19.41l6-6-1.41-1.41z"/>
-                    </svg>
-                    Install App
-                </button>
+                {{-- 🧍 Top Customers Table & Chart --}}
+                <div class="bg-white rounded-xl shadow p-5 border border-gray-100 space-y-5">
+                    <h4 class="text-md font-semibold text-gray-700 flex items-center">
+                        <x-lucide-users class="w-5 h-5 text-indigo-600 mr-2" /> Top 5 Customers
+                    </h4>
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-gray-100 text-gray-700">
+                            <tr>
+                                <th class="px-4 py-2">Customer</th>
+                                <th class="px-4 py-2 text-right">Total Spent</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($topCustomers as $c)
+                                <tr class="border-t hover:bg-gray-50">
+                                    <td class="px-4 py-2">{{ $c->customer->name ?? 'Unknown' }}</td>
+                                    <td class="px-4 py-2 text-right text-indigo-600 font-semibold">
+                                        {{ number_format($c->total_spent, 2) }}
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="2" class="text-center py-3 text-gray-500">No customer data yet</td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                    <div class="mt-4">
+                        <canvas id="topCustomersChart" height="140"></canvas>
+                    </div>
+                </div>
             </div>
         </section>
         @endif
     </div>
 
-    {{-- Chart.js --}}
-    @if($sections['charts'])
-        @vite(['resources/js/chart.js'])
+    {{-- 📊 Chart Scripts --}}
+    @if($sections['charts'] || $sections['insights'])
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <script>
             document.addEventListener('DOMContentLoaded', () => {
-                const ctx = document.getElementById('salesChart').getContext('2d');
-                new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: @json($months),
-                        datasets: [
-                            {
-                                label: 'Sales',
-                                data: @json($salesTrend),
-                                borderColor: '#4F46E5',
-                                backgroundColor: 'rgba(79,70,229,0.1)',
-                                tension: 0.35,
-                                fill: true,
+                // === Trend Chart ===
+                const ctxTrend = document.getElementById('trendChart')?.getContext('2d');
+                if (ctxTrend) {
+                    new Chart(ctxTrend, {
+                        type: 'line',
+                        data: {
+                            labels: @json($months),
+                            datasets: [
+                                {
+                                    label: 'Sales',
+                                    data: @json($salesTrend),
+                                    borderColor: '#4F46E5',
+                                    backgroundColor: 'rgba(79,70,229,0.1)',
+                                    tension: 0.35,
+                                    fill: true,
+                                },
+                                {
+                                    label: 'Purchases',
+                                    data: @json($purchaseTrend),
+                                    borderColor: '#EC4899',
+                                    backgroundColor: 'rgba(236,72,153,0.1)',
+                                    tension: 0.35,
+                                    fill: true,
+                                },
+                            ],
+                        },
+                        options: { responsive: true, scales: { y: { beginAtZero: true } } },
+                    });
+                }
+
+                // === 30-Day Sales Chart ===
+                fetch('{{ route('dashboard.sales.chart') }}')
+                    .then(res => res.json())
+                    .then(data => {
+                        const ctxSales = document.getElementById('salesChart')?.getContext('2d');
+                        if (ctxSales) {
+                            new Chart(ctxSales, {
+                                type: 'bar',
+                                data: {
+                                    labels: data.labels,
+                                    datasets: [{
+                                        label: 'Daily Sales',
+                                        data: data.sales,
+                                        backgroundColor: 'rgba(79,70,229,0.6)',
+                                        borderRadius: 5,
+                                    }],
+                                },
+                                options: { responsive: true, scales: { y: { beginAtZero: true } } },
+                            });
+                        }
+                    });
+
+                // === Top Products Chart ===
+                const productsCtx = document.getElementById('topProductsChart')?.getContext('2d');
+                if (productsCtx) {
+                    new Chart(productsCtx, {
+                        type: 'bar',
+                        data: {
+                            labels: @json($topProducts->pluck('product.name')),
+                            datasets: [{
+                                label: 'Qty Sold',
+                                data: @json($topProducts->pluck('total_qty')),
+                                backgroundColor: '#4F46E5',
+                                borderRadius: 6,
+                            }],
+                        },
+                        options: {
+                            responsive: true,
+                            plugins: { legend: { display: false } },
+                            scales: { y: { beginAtZero: true } },
+                        },
+                    });
+                }
+
+                // === Top Customers Chart ===
+                const customersCtx = document.getElementById('topCustomersChart')?.getContext('2d');
+                if (customersCtx) {
+                    new Chart(customersCtx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: @json($topCustomers->pluck('customer.name')),
+                            datasets: [{
+                                label: 'Total Spent',
+                                data: @json($topCustomers->pluck('total_spent')),
+                                backgroundColor: [
+                                    '#4F46E5', '#6366F1', '#818CF8', '#A5B4FC', '#C7D2FE'
+                                ],
+                                borderWidth: 1,
+                            }],
+                        },
+                        options: {
+                            responsive: true,
+                            plugins: {
+                                legend: { position: 'bottom' },
                             },
-                            {
-                                label: 'Purchases',
-                                data: @json($purchaseTrend),
-                                borderColor: '#EC4899',
-                                backgroundColor: 'rgba(236,72,153,0.1)',
-                                tension: 0.35,
-                                fill: true,
-                            },
-                        ],
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: { legend: { position: 'top' } },
-                        scales: { y: { beginAtZero: true } },
-                    },
-                });
+                        },
+                    });
+                }
             });
         </script>
     @endif
-
-    {{-- PWA Install Logic --}}
-    <script>
-        let deferredPrompt;
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            const installBtn = document.getElementById('installPWA');
-            if (installBtn) installBtn.style.display = 'flex';
-            installBtn.addEventListener('click', async () => {
-                deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-                if (outcome === 'accepted') console.log('PWA installed');
-                deferredPrompt = null;
-            });
-        });
-    </script>
 </x-app-layout>

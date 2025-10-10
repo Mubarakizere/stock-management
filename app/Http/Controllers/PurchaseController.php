@@ -7,7 +7,8 @@ use App\Models\{
     PurchaseItem,
     Product,
     Supplier,
-    StockMovement
+    StockMovement,
+    Loan
 };
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{DB, Auth, Log};
@@ -36,6 +37,7 @@ class PurchaseController extends Controller
 
     /**
      * Store a new purchase.
+     * Automatically creates a Loan (taken) when supplier not fully paid.
      */
     public function store(Request $request)
     {
@@ -53,12 +55,11 @@ class PurchaseController extends Controller
             'discount'                => 'nullable|numeric|min:0|max:100',
         ]);
 
-        DB::beginTransaction();
-
         try {
-            Log::info('🧾 Creating Purchase...', $request->all());
+            DB::beginTransaction();
+            Log::info('🧾 Creating Purchase...', ['user' => Auth::id(), 'payload' => $request->all()]);
 
-            // Step 1️⃣ - Create Purchase shell
+            // 1️⃣ Create Purchase shell
             $purchase = Purchase::create([
                 'supplier_id'   => $request->supplier_id,
                 'user_id'       => Auth::id(),
@@ -71,12 +72,12 @@ class PurchaseController extends Controller
                 'notes'         => $request->notes ?? null,
             ]);
 
-            // Step 2️⃣ - Loop through products
+            // 2️⃣ Loop through products
             $subtotal = 0;
             foreach ($request->products as $item) {
-                $quantity  = $item['quantity'];
-                $unitCost  = $item['unit_cost'];
-                $totalCost = $quantity * $unitCost;
+                $quantity  = (float) $item['quantity'];
+                $unitCost  = (float) $item['unit_cost'];
+                $totalCost = round($quantity * $unitCost, 2);
                 $subtotal += $totalCost;
 
                 PurchaseItem::create([
@@ -102,11 +103,11 @@ class PurchaseController extends Controller
                 $this->updateWeightedAverageCost($product, $quantity, $unitCost);
             }
 
-            // Step 3️⃣ - Finalize totals
+            // 3️⃣ Finalize totals
             $taxValue      = ($subtotal * ($purchase->tax ?? 0)) / 100;
             $discountValue = ($subtotal * ($purchase->discount ?? 0)) / 100;
             $totalAmount   = ($subtotal + $taxValue) - $discountValue;
-            $balanceDue    = $totalAmount - $purchase->amount_paid;
+            $balanceDue    = $totalAmount - ($purchase->amount_paid ?? 0);
 
             $purchase->update([
                 'subtotal'      => $subtotal,
@@ -116,16 +117,30 @@ class PurchaseController extends Controller
                 'balance_due'   => $balanceDue,
             ]);
 
-            DB::commit();
+            // 4️⃣ Auto-create Loan if unpaid balance exists
+            if ($balanceDue > 0) {
+                Loan::create([
+                    'type'        => 'taken',
+                    'supplier_id' => $purchase->supplier_id,
+                    'amount'      => $balanceDue,
+                    'loan_date'   => $purchase->purchase_date,
+                    'status'      => 'pending',
+                    'notes'       => "Auto-created for Purchase #{$purchase->id} (Unpaid supplier balance)",
+                ]);
+                Log::info('💳 Loan (taken) auto-created for purchase', [
+                    'purchase_id' => $purchase->id,
+                    'balance'     => $balanceDue,
+                ]);
+            }
 
+            DB::commit();
             Log::info('✅ Purchase stored successfully', ['purchase_id' => $purchase->id]);
 
-            // 🪄 Transactions & DebitCredits are auto-created by PurchaseObserver
             return redirect()
                 ->route('purchases.index')
                 ->with('success', 'Purchase recorded successfully.');
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
             Log::error('❌ Purchase store failed', ['error' => $e->getMessage()]);
             return back()->withErrors(['error' => 'Purchase failed: ' . $e->getMessage()]);
@@ -172,7 +187,7 @@ class PurchaseController extends Controller
     }
 
     /**
-     * Delete purchase (and cascade related data).
+     * Delete purchase (and related stock, loan).
      */
     public function destroy(Purchase $purchase)
     {
@@ -180,6 +195,8 @@ class PurchaseController extends Controller
             StockMovement::where('source_type', Purchase::class)
                 ->where('source_id', $purchase->id)
                 ->delete();
+
+            Loan::where('notes', "Auto-created for Purchase #{$purchase->id} (Unpaid supplier balance)")->delete();
 
             $purchase->items()->delete();
             $purchase->delete();
@@ -198,6 +215,7 @@ class PurchaseController extends Controller
     public function invoice(Purchase $purchase)
     {
         $purchase->load(['supplier', 'items.product', 'transaction', 'user']);
+
         $pdf = Pdf::loadView('purchases.invoice', compact('purchase'))
             ->setPaper('a4')
             ->setOption('isHtml5ParserEnabled', true)

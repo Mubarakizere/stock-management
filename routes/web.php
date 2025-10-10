@@ -13,13 +13,14 @@ use App\Http\Controllers\DebitCreditController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\StockMovementController;
+use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\Auth\RoleRedirectController;
 
 /*
 |--------------------------------------------------------------------------
 | 🌐 Web Routes
 |--------------------------------------------------------------------------
-| Defines all web-accessible routes for the application.
+| Defines all web-accessible routes for the Stock Management System.
 | Includes authentication, role-based access, and dashboard modules.
 |--------------------------------------------------------------------------
 */
@@ -46,19 +47,22 @@ Route::get('/redirect-by-role', RoleRedirectController::class)
 Route::middleware(['auth', 'verified'])->group(function () {
 
     // =======================
-    // 🏠 Dashboard
+    // 🏠 Dashboard & Charts
     // =======================
     Route::get('/dashboard', [DashboardController::class, 'index'])
         ->name('dashboard')
         ->middleware('role:admin,manager,cashier');
 
+    // 🔄 AJAX Sales Chart (30-day)
+    Route::get('/dashboard/sales-chart', [DashboardController::class, 'salesChartData'])
+        ->name('dashboard.sales.chart')
+        ->middleware('role:admin,manager');
+
     // =======================
     // 👥 User Management (Admin only)
     // =======================
     Route::middleware('role:admin')->group(function () {
-        Route::get('/users', function () {
-            return view('users.index');
-        })->name('users.index');
+        Route::get('/users', fn() => view('users.index'))->name('users.index');
     });
 
     // =======================
@@ -79,7 +83,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('/transactions/{transaction}', [TransactionController::class, 'update'])->name('transactions.update');
         Route::delete('/transactions/{transaction}', [TransactionController::class, 'destroy'])->name('transactions.destroy');
 
-        // Export routes
+        // Export Routes
         Route::get('/transactions/export/csv', [TransactionController::class, 'exportCsv'])->name('transactions.export.csv');
         Route::get('/transactions/export/pdf', [TransactionController::class, 'exportPdf'])->name('transactions.export.pdf');
     });
@@ -125,14 +129,33 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // =======================
     // 🏦 Loans Management
     // =======================
-    Route::resource('loans', LoanController::class)->middleware('role:admin,manager');
+    Route::middleware(['auth'])->group(function () {
+
+    // Loan management
+    Route::middleware('role:admin,manager')->group(function () {
+        Route::resource('loans', LoanController::class);
+    });
+
+    // Loan report export (admin only)
+    Route::get('loans/export/pdf', [LoanController::class, 'exportPdf'])
+        ->name('loans.export.pdf')
+        ->middleware('role:admin');
+});
+
+
 
     // =======================
-    // 📈 Reports (Admin only)
     // =======================
+// 📈 Reports (Admin only)
+// =======================
     Route::middleware('role:admin')->group(function () {
-        Route::get('/reports', fn() => view('reports.index'))->name('reports.index');
-    });
+    Route::get('/reports', [ReportsController::class, 'index'])->name('reports.index');
+    Route::get('/reports/export/sales/csv', [ReportsController::class, 'exportSalesCsv'])->name('reports.export.sales.csv');
+    Route::get('/reports/export/finance/pdf', [ReportsController::class, 'exportFinancePdf'])->name('reports.export.finance.pdf');
+    Route::get('/reports/export/insights/pdf', [ReportsController::class, 'exportInsightsPdf'])->name('reports.export.insights.pdf');
+});
+
+
 
     // =======================
     // 👤 User Profile (Breeze)

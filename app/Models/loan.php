@@ -29,4 +29,17 @@ class Loan extends Model
     {
         return $this->belongsTo(Supplier::class);
     }
+
+    public function payments()
+    {
+        return $this->hasMany(LoanPayment::class);
+    }
+
+    public function checkIfFullyPaid(): void
+    {
+        $totalPaid = $this->payments()->sum('amount');
+        if ($totalPaid >= $this->amount && $this->status !== 'paid') {
+            $this->update(['status' => 'paid']);
+        }
+    }
 }
