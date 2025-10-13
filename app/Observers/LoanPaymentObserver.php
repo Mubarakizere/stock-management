@@ -3,53 +3,104 @@
 namespace App\Observers;
 
 use App\Models\LoanPayment;
-use App\Models\Transaction;
-use App\Models\DebitCredit;
+use Illuminate\Support\Facades\Log;
 
 class LoanPaymentObserver
 {
+    /**
+     * Handle creation of a loan payment.
+     */
     public function created(LoanPayment $payment)
     {
-        $loan = $payment->loan;
-
-        // 1. Create financial entries
-        Transaction::create([
-            'type' => 'credit', // repayment = money in
-            'user_id' => $payment->user_id,
-            'customer_id' => $loan->customer_id,
-            'supplier_id' => $loan->supplier_id,
-            'amount' => $payment->amount,
-            'transaction_date' => $payment->payment_date,
-            'method' => $payment->method,
-            'notes' => 'Loan payment for Loan #' . $loan->id,
-        ]);
-
-        DebitCredit::create([
-            'type' => 'credit',
-            'amount' => $payment->amount,
-            'description' => 'Loan payment for Loan #' . $loan->id,
-            'date' => $payment->payment_date,
-            'user_id' => $payment->user_id,
-            'customer_id' => $loan->customer_id,
-            'supplier_id' => $loan->supplier_id,
-            'transaction_id' => $loan->id,
-        ]);
-
-        // 2. Update loan balance
-        $totalPaid = $loan->payments()->sum('amount');
-        if ($totalPaid >= $loan->amount) {
-            $loan->update(['status' => 'paid']);
-        }
+        $this->recalculateLoanStatus($payment);
     }
 
+    /**
+     * Handle updates to a loan payment.
+     */
+    public function updated(LoanPayment $payment)
+    {
+        $this->recalculateLoanStatus($payment);
+    }
+
+    /**
+     * Handle deletion of a loan payment.
+     */
     public function deleted(LoanPayment $payment)
     {
-        DebitCredit::where('description', 'like', '%Loan #' . $payment->loan_id . '%')
-            ->where('amount', $payment->amount)
-            ->delete();
+        $this->recalculateLoanStatus($payment);
+    }
 
-        Transaction::where('notes', 'like', '%Loan #' . $payment->loan_id . '%')
-            ->where('amount', $payment->amount)
-            ->delete();
+    /**
+     * 🔁 Centralized logic for recalculating and syncing loan + related records.
+     * Supports full or partial (installment) payments.
+     */
+    protected function recalculateLoanStatus(LoanPayment $payment): void
+    {
+        $loan = $payment->loan;
+        if (!$loan) {
+            Log::warning("⚠️ LoanPaymentObserver: Payment {$payment->id} has no related loan.");
+            return;
+        }
+
+        // 📊 Recalculate totals
+        $totalPaid = (float) $loan->payments()->sum('amount');
+        $remaining = round(($loan->amount ?? 0) - $totalPaid, 2);
+
+        // ✅ If fully paid
+        if ($remaining <= 0.009) {
+            $loan->updateQuietly([
+                'status' => 'paid',
+            ]);
+
+            Log::info("✅ Loan #{$loan->id} marked as PAID automatically (Total Paid: {$totalPaid}).");
+
+            // --- Auto-update linked SALE ---
+            if ($loan->sale) {
+                $loan->sale->updateQuietly([
+                    'status'       => 'completed',
+                    'amount_paid'  => $loan->sale->total_amount,
+                ]);
+                Log::info("💰 Sale #{$loan->sale->id} marked COMPLETED (Loan #{$loan->id} fully paid).");
+            }
+
+            // --- Auto-update linked PURCHASE ---
+            if ($loan->purchase) {
+                $loan->purchase->updateQuietly([
+                    'status'        => 'completed', // ✅ fix enum constraint
+                    'balance_due'   => 0,
+                    'amount_paid'   => $loan->purchase->total_amount,
+                ]);
+                Log::info("📦 Purchase #{$loan->purchase->id} marked COMPLETED and balance set to 0 (Loan #{$loan->id} fully paid).");
+            }
+        }
+
+        // 🔁 If partially paid (installments)
+        elseif ($remaining > 0.009) {
+            $loan->updateQuietly([
+                'status' => 'pending',
+            ]);
+
+            Log::info("💳 Loan #{$loan->id} updated (Installment Paid). Remaining: {$remaining}");
+
+            // --- Reflect real-time remaining balances on related SALE ---
+            if ($loan->sale) {
+                $loan->sale->updateQuietly([
+                    'status'       => 'pending',
+                    'amount_paid'  => $totalPaid,
+                ]);
+                Log::info("↩️ Sale #{$loan->sale->id} updated (Partial payment, remaining: {$remaining}).");
+            }
+
+            // --- Reflect real-time remaining balances on related PURCHASE ---
+            if ($loan->purchase) {
+                $loan->purchase->updateQuietly([
+                    'status'        => 'pending',
+                    'amount_paid'   => $totalPaid,
+                    'balance_due'   => $remaining,
+                ]);
+                Log::info("↩️ Purchase #{$loan->purchase->id} updated (Partial payment, remaining: {$remaining}).");
+            }
+        }
     }
 }

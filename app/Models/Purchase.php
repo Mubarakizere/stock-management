@@ -9,6 +9,7 @@ class Purchase extends Model
 {
     use HasFactory;
 
+    /* ───────────── Fillable ───────────── */
     protected $fillable = [
         'supplier_id',
         'user_id',
@@ -24,7 +25,18 @@ class Purchase extends Model
         'notes',
     ];
 
-    /* ─────────── Relationships ─────────── */
+    /* ───────────── Casts ───────────── */
+    protected $casts = [
+        'purchase_date' => 'date',
+        'subtotal'      => 'float',
+        'tax'           => 'float',
+        'discount'      => 'float',
+        'total_amount'  => 'float',
+        'amount_paid'   => 'float',
+        'balance_due'   => 'float',
+    ];
+
+    /* ───────────── Relationships ───────────── */
 
     public function supplier()
     {
@@ -46,14 +58,30 @@ class Purchase extends Model
         return $this->hasOne(Transaction::class);
     }
 
-    /* ─────────── Helper Methods ─────────── */
+    public function loan()
+    {
+        return $this->hasOne(Loan::class);
+    }
 
-    public function updateTotals()
+    /* ───────────── Helpers ───────────── */
+
+    /**
+     * Recalculate subtotal, total, and balance fields.
+     */
+    public function updateTotals(): void
     {
         $subtotal = $this->items->sum('total_cost');
         $this->subtotal = $subtotal;
-        $this->total_amount = ($subtotal + $this->tax) - $this->discount;
-        $this->balance_due = $this->total_amount - $this->amount_paid;
+        $this->total_amount = ($subtotal + ($this->tax ?? 0)) - ($this->discount ?? 0);
+        $this->balance_due = ($this->total_amount ?? 0) - ($this->amount_paid ?? 0);
         $this->save();
+    }
+
+    /**
+     * Quick check: is this purchase fully paid?
+     */
+    public function getIsPaidAttribute(): bool
+    {
+        return $this->status === 'completed' && ($this->balance_due ?? 0) <= 0.009;
     }
 }

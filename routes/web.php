@@ -140,6 +140,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('loans/export/pdf', [LoanController::class, 'exportPdf'])
         ->name('loans.export.pdf')
         ->middleware('role:admin');
+    Route::prefix('loans/{loan}')->middleware('auth')->group(function () {
+    Route::get('payments/create', [\App\Http\Controllers\LoanPaymentController::class, 'create'])
+        ->name('loan-payments.create');
+
+    Route::post('payments', [\App\Http\Controllers\LoanPaymentController::class, 'store'])
+        ->name('loan-payments.store');
+});
 });
 
 

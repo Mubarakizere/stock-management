@@ -2,125 +2,165 @@
 
 namespace App\Observers;
 
-use App\Models\{Purchase, Transaction, DebitCredit};
-use Illuminate\Support\Facades\{DB, Auth, Log};
+use App\Models\{Purchase, Transaction, DebitCredit, Loan};
+use Illuminate\Support\Facades\{Auth, DB, Log};
 
 class PurchaseObserver
 {
     /**
-     * Handle the Purchase "created" event.
-     * Runs AFTER the DB transaction is committed (PostgreSQL-safe).
+     * Handle "created" event for purchases.
+     * Auto-create financial entries + loan if not fully paid.
      */
     public function created(Purchase $purchase)
     {
         DB::afterCommit(function () use ($purchase) {
             try {
-                Log::info('🧾 PurchaseObserver: Auto transaction creation started', [
-                    'purchase_id' => $purchase->id,
-                ]);
+                Log::info('🧾 PurchaseObserver: created()', ['purchase_id' => $purchase->id]);
 
-                // ✅ Create Transaction (debit)
-                $transaction = Transaction::create([
-                    'type' => 'debit',
-                    'user_id' => $purchase->user_id ?? Auth::id(),
-                    'supplier_id' => $purchase->supplier_id,
-                    'purchase_id' => $purchase->id,
-                    'amount' => $purchase->amount_paid ?? $purchase->total_amount ?? 0,
-                    'transaction_date' => $purchase->purchase_date ?? now(),
-                    'method' => 'cash',
-                    'notes' => 'Auto-generated for Purchase #' . $purchase->id,
-                ]);
+                // ✅ 1. Record Transaction & DebitCredit
+                if ($purchase->amount_paid > 0) {
+                    $transaction = Transaction::create([
+                        'type'             => 'debit', // because it's an expense
+                        'user_id'          => $purchase->user_id ?? Auth::id(),
+                        'supplier_id'      => $purchase->supplier_id,
+                        'purchase_id'      => $purchase->id,
+                        'amount'           => $purchase->amount_paid,
+                        'transaction_date' => $purchase->purchase_date ?? now(),
+                        'method'           => $purchase->method ?? 'cash',
+                        'notes'            => 'Auto-generated from Purchase #' . $purchase->id,
+                    ]);
 
-                Log::info('💰 PurchaseObserver: Transaction created', [
-                    'transaction_id' => $transaction->id,
-                ]);
+                    DebitCredit::create([
+                        'type'           => 'debit',
+                        'amount'         => $purchase->amount_paid,
+                        'description'    => 'Purchase payment - #' . $purchase->id,
+                        'date'           => now()->toDateString(),
+                        'user_id'        => $purchase->user_id ?? Auth::id(),
+                        'supplier_id'    => $purchase->supplier_id,
+                        'transaction_id' => $transaction->id,
+                    ]);
+                }
 
-                // ✅ Create linked DebitCredit
-                DebitCredit::create([
-                    'type' => 'debit',
-                    'amount' => $transaction->amount,
-                    'description' => 'Purchase recorded - #' . $purchase->id,
-                    'date' => now(),
-                    'user_id' => $purchase->user_id ?? Auth::id(),
-                    'supplier_id' => $purchase->supplier_id,
-                    'transaction_id' => $transaction->id,
-                ]);
+                // ✅ 2. Auto-create Loan (taken) if unpaid balance exists
+                $unpaid = ($purchase->total_amount ?? 0) - ($purchase->amount_paid ?? 0);
 
-                Log::info('💸 PurchaseObserver: DebitCredit created', [
+                if ($unpaid > 0.009) {
+                    Loan::updateOrCreate(
+                        ['purchase_id' => $purchase->id],
+                        [
+                            'user_id'     => $purchase->user_id ?? Auth::id(),
+                            'supplier_id' => $purchase->supplier_id,
+                            'type'        => 'taken',
+                            'amount'      => $unpaid,
+                            'loan_date'   => $purchase->purchase_date ?? now(),
+                            'status'      => 'pending',
+                            'notes'       => 'Auto-created from Purchase #' . $purchase->id,
+                        ]
+                    );
+
+                    Log::info('💰 PurchaseObserver: Auto-loan created (taken)', [
+                        'purchase_id' => $purchase->id,
+                        'unpaid'      => $unpaid,
+                    ]);
+                }
+
+            } catch (\Throwable $e) {
+                Log::error('❌ PurchaseObserver: creation failed', [
                     'purchase_id' => $purchase->id,
-                    'transaction_id' => $transaction->id,
-                ]);
-            } catch (\Exception $e) {
-                Log::error('❌ PurchaseObserver: Creation failed', [
-                    'purchase_id' => $purchase->id,
-                    'error' => $e->getMessage(),
+                    'error'       => $e->getMessage(),
                 ]);
             }
         });
     }
 
     /**
-     * Handle the Purchase "updated" event.
+     * Handle "updated" event for purchases.
+     * Keeps loan + transaction in sync.
      */
     public function updated(Purchase $purchase)
     {
         DB::afterCommit(function () use ($purchase) {
             try {
-                $transaction = $purchase->transaction;
+                Log::info('♻️ PurchaseObserver: updated()', ['purchase_id' => $purchase->id]);
 
-                if ($transaction) {
-                    $transaction->update([
-                        'amount' => $purchase->amount_paid ?? $purchase->total_amount ?? 0,
-                        'transaction_date' => now(),
-                        'notes' => 'Updated from Purchase #' . $purchase->id,
+                $unpaid = ($purchase->total_amount ?? 0) - ($purchase->amount_paid ?? 0);
+                $loan   = Loan::where('purchase_id', $purchase->id)->first();
+
+                // ✅ Fully paid → mark loan + purchase as paid/completed
+                if ($unpaid <= 0.009 && $loan) {
+                    $loan->updateQuietly(['status' => 'paid']);
+                    $purchase->updateQuietly(['status' => 'completed']);
+
+                    Log::info('✅ PurchaseObserver: Loan + Purchase marked as paid', [
+                        'purchase_id' => $purchase->id,
+                        'loan_id'     => $loan->id,
                     ]);
-
-                    Log::info('♻️ PurchaseObserver: Transaction updated', [
-                        'transaction_id' => $transaction->id,
-                    ]);
-
-                    $debitCredit = DebitCredit::where('transaction_id', $transaction->id)->first();
-                    if ($debitCredit) {
-                        $debitCredit->update([
-                            'amount' => $transaction->amount,
-                            'description' => 'Updated Purchase - #' . $purchase->id,
-                            'date' => now(),
-                        ]);
-
-                        Log::info('♻️ PurchaseObserver: DebitCredit updated', [
-                            'debit_credit_id' => $debitCredit->id,
-                        ]);
-                    }
                 }
-            } catch (\Exception $e) {
-                Log::error('❌ PurchaseObserver: Update failed', [
+
+                // ✅ Still unpaid → update or create pending loan
+                elseif ($unpaid > 0.009) {
+                    Loan::updateOrCreate(
+                        ['purchase_id' => $purchase->id],
+                        [
+                            'user_id'     => $purchase->user_id ?? Auth::id(),
+                            'supplier_id' => $purchase->supplier_id,
+                            'type'        => 'taken',
+                            'amount'      => $unpaid,
+                            'loan_date'   => $purchase->purchase_date ?? now(),
+                            'status'      => 'pending',
+                            'notes'       => 'Auto-updated from Purchase #' . $purchase->id,
+                        ]
+                    );
+
+                    $purchase->updateQuietly(['status' => 'pending']);
+
+                    Log::info('💸 PurchaseObserver: Loan updated (still pending)', [
+                        'purchase_id' => $purchase->id,
+                        'unpaid'      => $unpaid,
+                    ]);
+                }
+
+                // ✅ Sync transaction amount if exists
+                if ($purchase->transaction) {
+                    $purchase->transaction->update([
+                        'amount' => $purchase->amount_paid ?? 0,
+                        'notes'  => 'Updated from Purchase #' . $purchase->id,
+                    ]);
+                }
+
+            } catch (\Throwable $e) {
+                Log::error('❌ PurchaseObserver: update failed', [
                     'purchase_id' => $purchase->id,
-                    'error' => $e->getMessage(),
+                    'error'       => $e->getMessage(),
                 ]);
             }
         });
     }
 
     /**
-     * Handle the Purchase "deleted" event.
+     * Handle "deleted" event for purchases.
+     * Cleans up all linked financial data.
      */
     public function deleted(Purchase $purchase)
     {
         DB::afterCommit(function () use ($purchase) {
             try {
-                $transaction = $purchase->transaction;
-                if ($transaction) {
-                    DebitCredit::where('transaction_id', $transaction->id)->delete();
-                    $transaction->delete();
+                Loan::where('purchase_id', $purchase->id)->delete();
 
-                    Log::info('🗑️ PurchaseObserver: Deleted linked records', [
-                        'purchase_id' => $purchase->id,
-                    ]);
-                }
-            } catch (\Exception $e) {
-                Log::error('❌ PurchaseObserver: Delete failed', [
+                DebitCredit::whereHas('transaction', fn($q) =>
+                    $q->where('purchase_id', $purchase->id)
+                )->delete();
+
+                $purchase->transaction?->delete();
+
+                Log::info('🗑️ PurchaseObserver: cleaned up related loan + transaction', [
                     'purchase_id' => $purchase->id,
-                    'error' => $e->getMessage(),
+                ]);
+
+            } catch (\Throwable $e) {
+                Log::error('❌ PurchaseObserver: delete failed', [
+                    'purchase_id' => $purchase->id,
+                    'error'       => $e->getMessage(),
                 ]);
             }
         });

@@ -117,21 +117,8 @@ class PurchaseController extends Controller
                 'balance_due'   => $balanceDue,
             ]);
 
-            // 4️⃣ Auto-create Loan if unpaid balance exists
-            if ($balanceDue > 0) {
-                Loan::create([
-                    'type'        => 'taken',
-                    'supplier_id' => $purchase->supplier_id,
-                    'amount'      => $balanceDue,
-                    'loan_date'   => $purchase->purchase_date,
-                    'status'      => 'pending',
-                    'notes'       => "Auto-created for Purchase #{$purchase->id} (Unpaid supplier balance)",
-                ]);
-                Log::info('💳 Loan (taken) auto-created for purchase', [
-                    'purchase_id' => $purchase->id,
-                    'balance'     => $balanceDue,
-                ]);
-            }
+
+
 
             DB::commit();
             Log::info('✅ Purchase stored successfully', ['purchase_id' => $purchase->id]);

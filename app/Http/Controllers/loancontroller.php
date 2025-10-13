@@ -20,7 +20,8 @@ class LoanController extends Controller
      */
     public function index()
     {
-        $loans = Loan::with(['customer', 'supplier', 'payments'])->latest()->get();
+        $loans = Loan::with(['customer', 'supplier', 'payments'])->latest()->paginate(10);
+
 
         $stats = [
             'total_loans'   => Loan::sum('amount'),
