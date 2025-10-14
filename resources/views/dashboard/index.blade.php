@@ -27,18 +27,40 @@
         @if($sections['kpis'] ?? false)
         <section>
             <h3 class="text-lg font-semibold text-indigo-600 mb-4">Key Performance Indicators</h3>
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                <x-stat label="Total Sales" :value="$totalSales" />
-                <x-stat label="Total Profit" :value="$totalProfit" color="text-green-600" />
-                <x-stat label="Pending Balances" :value="$pendingBalances" color="text-red-600" />
-                <x-stat label="Total Purchases" :value="$totalPurchases" />
+
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <x-stat label="Total Sales" :value="$totalSales" color="text-indigo-600" icon="dollar-sign" />
+                <x-stat label="Total Profit" :value="$totalProfit" color="text-green-600" icon="trending-up" />
+                <x-stat label="Pending Balances" :value="$pendingBalances" color="text-red-600" icon="alert-circle" />
+                <x-stat label="Total Purchases" :value="$totalPurchases" color="text-pink-600" icon="shopping-bag" />
+                <x-stat label="Stock Value" :value="$totalStockValue" color="text-amber-600" icon="package" />
                 @if($sections['finance'])
-                    <x-stat label="Credits (In)" :value="$totalCredits" />
-                    <x-stat label="Debits (Out)" :value="$totalDebits" />
                     <x-stat label="Net Balance"
-                            :value="$netBalance"
-                            color="{{ $netBalance >= 0 ? 'text-green-600' : 'text-red-600' }}" />
+                        :value="$netBalance"
+                        :color="$netBalance >= 0 ? 'text-green-600' : 'text-red-600'"
+                        icon="scale" />
                 @endif
+            </div>
+
+            {{-- 🔹 Mini Trend Summary --}}
+            <div class="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                <div class="bg-white border border-gray-100 rounded-lg shadow-sm p-4">
+                    <p class="text-gray-500 font-medium">Today’s Sales</p>
+                    <p class="font-semibold text-indigo-600">
+                        RWF {{ number_format($todaySales, 0) }}
+                        <span class="ml-1 text-xs {{ $salesChange >= 0 ? 'text-green-600' : 'text-red-600' }}">
+                            {{ $salesChange >= 0 ? '+' : '' }}{{ number_format($salesChange, 1) }}%
+                        </span>
+                    </p>
+                </div>
+                <div class="bg-white border border-gray-100 rounded-lg shadow-sm p-4">
+                    <p class="text-gray-500 font-medium">This Week</p>
+                    <p class="font-semibold text-indigo-600">RWF {{ number_format($weekSales, 0) }}</p>
+                </div>
+                <div class="bg-white border border-gray-100 rounded-lg shadow-sm p-4">
+                    <p class="text-gray-500 font-medium">This Month</p>
+                    <p class="font-semibold text-indigo-600">RWF {{ number_format($monthSales, 0) }}</p>
+                </div>
             </div>
         </section>
         @endif
@@ -64,7 +86,7 @@
             <h3 class="text-lg font-semibold text-indigo-600 mb-4">Advanced Insights</h3>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-                {{-- 🥇 Top Products Table & Chart --}}
+                {{-- 🥇 Top Products --}}
                 <div class="bg-white rounded-xl shadow p-5 border border-gray-100 space-y-5">
                     <h4 class="text-md font-semibold text-gray-700 flex items-center">
                         <x-lucide-trophy class="w-5 h-5 text-yellow-500 mr-2" /> Top 5 Selling Products
@@ -81,9 +103,9 @@
                             @forelse($topProducts as $p)
                                 <tr class="border-t hover:bg-gray-50">
                                     <td class="px-4 py-2">{{ $p->product->name ?? 'Unknown' }}</td>
-                                    <td class="px-4 py-2 text-right">{{ number_format($p->total_qty, 2) }}</td>
+                                    <td class="px-4 py-2 text-right">{{ number_format($p->total_qty, 0) }}</td>
                                     <td class="px-4 py-2 text-right text-green-600 font-semibold">
-                                        {{ number_format($p->total_revenue, 2) }}
+                                        RWF {{ number_format($p->total_revenue, 0) }}
                                     </td>
                                 </tr>
                             @empty
@@ -96,7 +118,7 @@
                     </div>
                 </div>
 
-                {{-- 🧍 Top Customers Table & Chart --}}
+                {{-- 🧍 Top Customers --}}
                 <div class="bg-white rounded-xl shadow p-5 border border-gray-100 space-y-5">
                     <h4 class="text-md font-semibold text-gray-700 flex items-center">
                         <x-lucide-users class="w-5 h-5 text-indigo-600 mr-2" /> Top 5 Customers
@@ -113,7 +135,7 @@
                                 <tr class="border-t hover:bg-gray-50">
                                     <td class="px-4 py-2">{{ $c->customer->name ?? 'Unknown' }}</td>
                                     <td class="px-4 py-2 text-right text-indigo-600 font-semibold">
-                                        {{ number_format($c->total_spent, 2) }}
+                                        RWF {{ number_format($c->total_spent, 0) }}
                                     </td>
                                 </tr>
                             @empty

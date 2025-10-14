@@ -93,6 +93,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // =======================
     Route::resource('categories', CategoryController::class)->middleware('role:admin,manager');
     Route::resource('products', ProductController::class)->middleware('role:admin,manager,cashier');
+    Route::get('/products/{product}', [ProductController::class, 'show'])
+    ->name('products.show')
+    ->middleware('role:admin,manager,cashier');
+
     Route::resource('suppliers', SupplierController::class)->middleware('role:admin,manager');
     Route::resource('customers', CustomerController::class)->middleware('role:admin,manager,cashier');
 

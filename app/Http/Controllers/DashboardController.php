@@ -8,7 +8,6 @@ use App\Models\Purchase;
 use App\Models\Loan;
 use App\Models\LoanPayment;
 use App\Models\DebitCredit;
-use App\Models\Customer;
 use App\Models\Product;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -36,18 +35,15 @@ class DashboardController extends Controller
         ];
 
         // =========================
-        // KPIs & Financial Overview
+        // 📊 KPI & Financial Overview
         // =========================
         $today = Carbon::today();
+        $monthStart = now()->startOfMonth();
 
-        // Sales and Profit
+        // Totals
         $totalSales     = Sale::sum('total_amount');
         $totalPurchases = Purchase::sum('total_amount');
-
-        // ✅ Profit from SaleItems (safe even if null)
-        $totalProfit = SaleItem::sum(DB::raw('COALESCE(profit, (unit_price - cost_price) * quantity)'));
-
-        // ✅ Pending Balances
+        $totalProfit    = SaleItem::sum(DB::raw('COALESCE(profit, (unit_price - cost_price) * quantity)'));
         $pendingBalances = Sale::where('status', 'pending')
             ->sum(DB::raw('total_amount - amount_paid'));
 
@@ -64,30 +60,46 @@ class DashboardController extends Controller
         $totalLoanPayments = LoanPayment::sum('amount');
 
         // =========================
-        // Today's Performance
+        // 🕒 Time-Based KPIs
         // =========================
-        $todaySalesTotal   = Sale::whereDate('created_at', $today)->sum('total_amount');
-        $myTodaySalesTotal = Sale::where('user_id', $user->id)
-                                 ->whereDate('created_at', $today)
-                                 ->sum('total_amount');
-        $myTodaySalesCount = Sale::where('user_id', $user->id)
-                                 ->whereDate('created_at', $today)
-                                 ->count();
-        $myLatestSales = Sale::where('user_id', $user->id)
-                             ->latest()
-                             ->take(5)
-                             ->get();
+        $todaySales   = Sale::whereDate('created_at', $today)->sum('total_amount');
+        $monthSales   = Sale::where('created_at', '>=', $monthStart)->sum('total_amount');
+        $weekSales    = Sale::whereBetween('created_at', [now()->startOfWeek(), now()])->sum('total_amount');
+
+        $yesterdaySales = Sale::whereDate('created_at', $today->copy()->subDay())->sum('total_amount');
+        $salesChange = $yesterdaySales > 0 ? (($todaySales - $yesterdaySales) / $yesterdaySales) * 100 : 0;
 
         // =========================
-        // Recent Transactions
+        // 💰 Stock & Assets
+        // =========================
+        $totalStockValue = Product::all()->sum(fn($p) => $p->stockValue());
+
+        // =========================
+        // 👤 User Daily Performance (Cashier / Manager)
+        // =========================
+        $myTodaySalesTotal = Sale::where('user_id', $user->id)
+            ->whereDate('created_at', $today)
+            ->sum('total_amount');
+
+        $myTodaySalesCount = Sale::where('user_id', $user->id)
+            ->whereDate('created_at', $today)
+            ->count();
+
+        $myLatestSales = Sale::where('user_id', $user->id)
+            ->latest()
+            ->take(5)
+            ->get();
+
+        // =========================
+        // 💳 Recent Transactions
         // =========================
         $recentTransactions = DebitCredit::with(['user', 'customer', 'supplier'])
-                                         ->latest()
-                                         ->take(10)
-                                         ->get();
+            ->latest()
+            ->take(10)
+            ->get();
 
         // =========================
-        // Chart Data (30-Day Trend)
+        // 📈 Chart Data (30-Day Trend)
         // =========================
         $chartData = Sale::select(
                 DB::raw('DATE(created_at) as date'),
@@ -102,7 +114,7 @@ class DashboardController extends Controller
         $chartSales  = $chartData->pluck('total_sales');
 
         // =========================
-        // Monthly Trends (6-month view)
+        // 📅 Monthly Trends (6-month view)
         // =========================
         $months = collect(range(1, 6))
             ->map(fn($m) => now()->subMonths(6 - $m)->format('M'));
@@ -118,10 +130,9 @@ class DashboardController extends Controller
             ->pluck('total');
 
         // =========================
-        // 🔹 Advanced Insights
+        // 🧠 Advanced Insights
         // =========================
-
-        // 🥇 Top 5 Selling Products (quantity & revenue)
+        // Top Products
         $topProducts = SaleItem::select(
                 'product_id',
                 DB::raw('SUM(quantity) as total_qty'),
@@ -133,7 +144,7 @@ class DashboardController extends Controller
             ->with('product:id,name')
             ->get();
 
-        // 🧍 Top 5 Customers (by total sales)
+        // Top Customers
         $topCustomers = Sale::select(
                 'customer_id',
                 DB::raw('SUM(total_amount) as total_spent')
@@ -163,7 +174,11 @@ class DashboardController extends Controller
             'activeLoans',
             'paidLoans',
             'totalLoanPayments',
-            'todaySalesTotal',
+            'todaySales',
+            'monthSales',
+            'weekSales',
+            'salesChange',
+            'totalStockValue',
             'myTodaySalesTotal',
             'myTodaySalesCount',
             'myLatestSales',
