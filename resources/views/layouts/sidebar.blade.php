@@ -1,27 +1,27 @@
 <aside
-    class="fixed inset-y-0 left-0 z-40 w-64 bg-white dark:bg-gray-800
-           border-r border-gray-200 dark:border-gray-700 shadow-sm
-           flex flex-col overflow-hidden lg:translate-x-0 lg:static lg:inset-0"
+    class="fixed inset-y-0 left-0 z-40 w-64 flex flex-col
+           bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-sm
+           lg:static lg:translate-x-0 transition-transform duration-200 ease-out
+           overflow-hidden"
     x-show="sidebarOpen"
     x-transition:enter="transition ease-out duration-200"
     x-transition:enter-start="-translate-x-full"
     x-transition:enter-end="translate-x-0"
-    x-transition:leave="transition ease-in duration-200"
+    x-transition:leave="transition ease-in duration-150"
     x-transition:leave-start="translate-x-0"
     x-transition:leave-end="-translate-x-full"
-    @click.away="sidebarOpen = false">
+    @click.away="if (window.innerWidth < 1024) sidebarOpen = false">
 
     <!-- Header -->
-    <div class="flex items-center justify-between px-4 py-4 border-b border-gray-100 dark:border-gray-700 flex-shrink-0">
+    <div class="flex-shrink-0 flex items-center justify-between px-4 py-4 border-b border-gray-100 dark:border-gray-700">
         <h1 class="text-lg font-bold text-indigo-600 tracking-tight">Stock Manager</h1>
         <button class="lg:hidden text-gray-500 hover:text-gray-700" @click="sidebarOpen = false">✕</button>
     </div>
 
-    <!-- ✅ Scrollable Content -->
-    <div class="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600
-                scrollbar-track-transparent hover:scrollbar-thumb-gray-400 dark:hover:scrollbar-thumb-gray-500">
-
+    <!-- ✅ Scrollable Navigation -->
+    <div class="flex-1 overflow-y-auto custom-scrollbar">
         <nav class="px-3 py-3 space-y-1 text-gray-700 dark:text-gray-200">
+
             @php $user = Auth::user(); @endphp
 
             {{-- 🔹 Dashboard --}}
@@ -84,8 +84,25 @@
             </form>
 
             <p class="text-xs text-gray-400 mt-4 px-3 pb-4">
-                Logged in as <span class="font-medium text-gray-700 dark:text-gray-200">{{ ucfirst($user->roleNames()[0] ?? 'User') }}</span>
+                Logged in as
+                <span class="font-medium text-gray-700 dark:text-gray-200">
+                    {{ ucfirst($user->roleNames()[0] ?? 'User') }}
+                </span>
             </p>
         </nav>
     </div>
 </aside>
+
+<!--  Custom Scrollbar -->
+<style>
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(156, 163, 175, 0.5);
+    border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(156, 163, 175, 0.7);
+}
+</style>

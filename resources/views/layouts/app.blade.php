@@ -118,3 +118,18 @@
         </main>
     </div>
 </div>
+<!--  Latest Lucide Icons (stable ESM build) -->
+<script type="module">
+    import { createIcons, icons } from "https://cdn.jsdelivr.net/npm/lucide@0.454.0/+esm";
+    document.addEventListener("DOMContentLoaded", () => {
+        createIcons({ icons });
+        // Re-render icons on Alpine DOM changes (e.g., darkMode toggle)
+        document.addEventListener("alpine:init", () => {
+            Alpine.effect(() => createIcons({ icons }));
+        });
+    });
+</script>
+<x-confirm-delete />
+@stack('scripts')
+</body>
+</html>

@@ -7,6 +7,33 @@ import Alpine from 'alpinejs';
 
 // Optional: make Alpine globally available
 window.Alpine = Alpine;
+
+// ===============================================
+// ✅ Register global Alpine stores BEFORE start()
+// ===============================================
+document.addEventListener('alpine:init', () => {
+    Alpine.store('deleteConfirm', {
+        open(url) {
+            this.url = url;
+            this.visible = true;
+        },
+        close() {
+            this.visible = false;
+            this.url = null;
+        },
+        confirm() {
+            if (this.url) {
+                document.getElementById('deleteForm').action = this.url;
+                document.getElementById('deleteForm').submit();
+            }
+            this.close();
+        },
+        visible: false,
+        url: null,
+    });
+});
+
+// ✅ Start Alpine AFTER registering stores
 Alpine.start();
 
 // ===============================================

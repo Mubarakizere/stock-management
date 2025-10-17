@@ -4,88 +4,157 @@
     <meta charset="UTF-8">
     <title>Purchase Invoice #{{ $purchase->id }}</title>
     <style>
-        body { font-family: 'DejaVu Sans', sans-serif; color:#111; font-size:13px; }
-        .wrap { width:100%; padding:20px; }
-        .row { display:flex; justify-content:space-between; gap:20px; }
-        .col { width:48%; }
-        .title { font-size:22px; font-weight:700; color:#111; margin:0 0 4px; }
-        .muted { color:#555; }
-        .hr { border-top:1px solid #e5e7eb; margin:14px 0; }
-        table { width:100%; border-collapse:collapse; margin-top:10px; }
-        th, td { border:1px solid #e5e7eb; padding:8px; }
-        th { background:#f3f4f6; text-align:left; }
-        td.num, th.num { text-align:right; }
-        .total-row td { font-weight:700; background:#f9fafb; }
-        .footer { display:flex; justify-content:space-between; margin-top:16px; color:#555; }
-        .badge { display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px; }
-        .badge-green { background:#dcfce7; color:#166534; }
-        .badge-yellow { background:#fef9c3; color:#854d0e; }
-        .badge-red { background:#fee2e2; color:#991b1b; }
+        /* ===============================
+           PAGE & TYPOGRAPHY
+        =============================== */
+        @page { margin: 30px 40px; }
+        body {
+            font-family: 'DejaVu Sans', sans-serif;
+            font-size: 13px;
+            color: #111827;
+            background: #fff;
+            margin: 0;
+        }
+        h1, h2, h3, h4 { margin: 0; color: #1e293b; }
+        p { margin: 2px 0; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td {
+            border: 1px solid #e5e7eb;
+            padding: 8px 10px;
+            vertical-align: top;
+        }
+        th {
+            background: #f9fafb;
+            color: #111827;
+            text-align: left;
+            font-weight: 600;
+        }
+        td { color: #374151; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+
+        /* ===============================
+           HEADER
+        =============================== */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2px solid #1e40af;
+            padding-bottom: 8px;
+            margin-bottom: 20px;
+        }
+        .company h2 {
+            font-size: 22px;
+            color: #1e40af;
+            font-weight: 700;
+        }
+        .company small { color: #6b7280; }
+        .invoice-meta { text-align: right; font-size: 13px; }
+
+        /* ===============================
+           BADGES
+        =============================== */
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .badge-green { background: #dcfce7; color: #166534; }
+        .badge-yellow { background: #fef9c3; color: #854d0e; }
+        .badge-red { background: #fee2e2; color: #991b1b; }
+
+        /* ===============================
+           TOTALS TABLE
+        =============================== */
+        .total-row td { font-weight: bold; background: #f9fafb; }
+        .muted { color: #6b7280; }
+
+        /* ===============================
+           FOOTER
+        =============================== */
+        .footer {
+            margin-top: 40px;
+            border-top: 1px solid #e5e7eb;
+            padding-top: 10px;
+            text-align: center;
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        /* ===============================
+           RESPONSIVE / PRINT
+        =============================== */
+        @media print {
+            body { -webkit-print-color-adjust: exact; }
+            .no-print { display: none; }
+        }
     </style>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" style="max-width:900px; margin:0 auto; padding:20px;">
 
-    {{-- HEADER --}}
-    <div class="row">
-        <div class="col">
-            <div class="title">{{ config('company.name', 'Your Company') }}</div>
+    {{-- 🔹 HEADER --}}
+    <div class="header">
+        <div class="company">
+            <h2>{{ config('company.name', config('app.name', 'Your Company')) }}</h2>
             @if(config('company.address_line1'))<div>{{ config('company.address_line1') }}</div>@endif
             @if(config('company.address_line2'))<div>{{ config('company.address_line2') }}</div>@endif
             @if(config('company.phone'))<div>Phone: {{ config('company.phone') }}</div>@endif
             @if(config('company.email'))<div>Email: {{ config('company.email') }}</div>@endif
             @if(config('company.tax_id'))<div>{{ config('company.tax_id') }}</div>@endif
         </div>
-        <div class="col" style="text-align:right;">
-            <div class="title">Purchase Invoice</div>
-            <div>Invoice #: <strong>#{{ $purchase->id }}</strong></div>
-            <div>Date: <strong>{{ $purchase->purchase_date }}</strong></div>
-            <div>Recorded by: <strong>{{ $purchase->user->name ?? 'System' }}</strong></div>
+
+        <div class="invoice-meta">
+            <h3 style="margin-bottom:4px;">Purchase Invoice</h3>
+            <p><strong>Invoice #:</strong> {{ $purchase->id }}</p>
+            <p><strong>Date:</strong> {{ \Carbon\Carbon::parse($purchase->purchase_date)->format('Y-m-d') }}</p>
+            <p><strong>Recorded by:</strong> {{ $purchase->user->name ?? 'System' }}</p>
             @php
                 $status = $purchase->status ?? 'completed';
                 $badge = $status === 'completed' ? 'badge-green' : ($status === 'pending' ? 'badge-yellow' : 'badge-red');
             @endphp
-            <div>Status: <span class="badge {{ $badge }}">{{ ucfirst($status) }}</span></div>
+            <p><strong>Status:</strong> <span class="badge {{ $badge }}">{{ ucfirst($status) }}</span></p>
         </div>
     </div>
 
-    <div class="hr"></div>
-
-    {{-- SUPPLIER INFO --}}
-    <div class="row">
-        <div class="col">
+    {{-- 🔹 SUPPLIER INFO --}}
+    <div style="margin-bottom:16px; display:flex; justify-content:space-between;">
+        <div>
             <strong>Supplier:</strong><br>
-            {{ $purchase->supplier->name }}<br>
-            @if(isset($purchase->supplier->phone))Phone: {{ $purchase->supplier->phone }}<br>@endif
-            @if(isset($purchase->supplier->email))Email: {{ $purchase->supplier->email }}<br>@endif
+            {{ $purchase->supplier->name ?? 'Unknown Supplier' }}<br>
+            @if($purchase->supplier->phone)<span>Phone: {{ $purchase->supplier->phone }}</span><br>@endif
+            @if($purchase->supplier->email)<span>Email: {{ $purchase->supplier->email }}</span><br>@endif
         </div>
-        <div class="col" style="text-align:right;">
+        <div style="text-align:right;">
             @if($purchase->invoice_number)
                 <div>Supplier Invoice: <strong>{{ $purchase->invoice_number }}</strong></div>
             @endif
-            @if(isset($purchase->method))
+            @if($purchase->method)
                 <div>Payment Method: <strong>{{ ucfirst($purchase->method) }}</strong></div>
             @endif
         </div>
     </div>
 
-    {{-- ITEMS TABLE --}}
+    {{-- 🔹 ITEMS TABLE --}}
     <table>
         <thead>
             <tr>
                 <th>Product</th>
-                <th class="num">Quantity</th>
-                <th class="num">Unit Cost</th>
-                <th class="num">Subtotal</th>
+                <th class="text-center">Qty</th>
+                <th class="text-right">Unit Cost</th>
+                <th class="text-right">Subtotal</th>
             </tr>
         </thead>
         <tbody>
             @foreach($purchase->items as $item)
                 <tr>
-                    <td>{{ $item->product->name }}</td>
-                    <td class="num">{{ number_format($item->quantity, 2) }}</td>
-                    <td class="num">{{ number_format($item->unit_cost, 2) }}</td>
-                    <td class="num">{{ number_format($item->total_cost, 2) }}</td>
+                    <td>{{ $item->product->name ?? 'N/A' }}</td>
+                    <td class="text-center">{{ number_format($item->quantity, 2) }}</td>
+                    <td class="text-right">{{ number_format($item->unit_cost, 2) }}</td>
+                    <td class="text-right">{{ number_format($item->total_cost, 2) }}</td>
                 </tr>
             @endforeach
         </tbody>
@@ -101,44 +170,47 @@
 
         <tfoot>
             <tr>
-                <td colspan="3" class="num muted">Subtotal</td>
-                <td class="num">{{ number_format($subtotal, 2) }}</td>
+                <td colspan="3" class="text-right muted">Subtotal</td>
+                <td class="text-right">{{ number_format($subtotal, 2) }}</td>
             </tr>
             <tr>
-                <td colspan="3" class="num muted">Tax</td>
-                <td class="num">{{ number_format($tax, 2) }}</td>
+                <td colspan="3" class="text-right muted">Tax</td>
+                <td class="text-right">{{ number_format($tax, 2) }}</td>
             </tr>
             <tr>
-                <td colspan="3" class="num muted">Discount</td>
-                <td class="num">-{{ number_format($discount, 2) }}</td>
+                <td colspan="3" class="text-right muted">Discount</td>
+                <td class="text-right">-{{ number_format($discount, 2) }}</td>
             </tr>
             <tr class="total-row">
-                <td colspan="3" class="num">Total Amount</td>
-                <td class="num">{{ number_format($total, 2) }}</td>
+                <td colspan="3" class="text-right">Total Amount</td>
+                <td class="text-right">{{ number_format($total, 2) }}</td>
             </tr>
             <tr>
-                <td colspan="3" class="num muted">Amount Paid</td>
-                <td class="num">{{ number_format($paid, 2) }}</td>
+                <td colspan="3" class="text-right muted">Amount Paid</td>
+                <td class="text-right">{{ number_format($paid, 2) }}</td>
             </tr>
             <tr>
-                <td colspan="3" class="num muted">Balance Due</td>
-                <td class="num">{{ number_format($balance, 2) }}</td>
+                <td colspan="3" class="text-right muted">Balance Due</td>
+                <td class="text-right" style="color: {{ $balance > 0 ? '#dc2626' : '#16a34a' }}">
+                    {{ number_format($balance, 2) }}
+                </td>
             </tr>
         </tfoot>
     </table>
 
-    {{-- NOTES --}}
+    {{-- 🔹 NOTES --}}
     @if($purchase->notes)
-        <div style="margin-top:12px;">
+        <div style="margin-top:16px;">
             <strong>Notes:</strong>
-            <div class="muted">{{ $purchase->notes }}</div>
+            <p class="muted" style="white-space: pre-line;">{{ $purchase->notes }}</p>
         </div>
     @endif
 
-    {{-- FOOTER --}}
+    {{-- 🔹 FOOTER --}}
     <div class="footer">
-        <div>Generated on {{ now()->format('d M Y, H:i') }}</div>
-        <div>{{ config('company.name', 'Your Company') }} • {{ config('company.email', 'info@example.com') }}</div>
+        <p>Thank you for your business!</p>
+        <p>Generated on {{ now()->format('d M Y, H:i') }}</p>
+        <p>{{ config('company.name', config('app.name')) }} • {{ config('company.email', 'info@example.com') }}</p>
     </div>
 </div>
 </body>

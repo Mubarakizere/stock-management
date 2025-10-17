@@ -4,47 +4,103 @@
     <meta charset="UTF-8">
     <title>Invoice #{{ $sale->id }}</title>
     <style>
+        /* ===============================
+           GLOBAL LAYOUT & TYPOGRAPHY
+        =============================== */
+        @page { margin: 30px 40px; }
         body {
             font-family: DejaVu Sans, sans-serif;
             font-size: 13px;
-            color: #333;
+            color: #111827;
+            background: #fff;
             margin: 0;
-            padding: 0;
         }
-        .container { width: 92%; margin: 0 auto; padding: 20px 0; }
-        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
-        .header h1 { margin: 0; color: #1e293b; font-size: 22px; }
-        .header h3 { margin: 0; color: #111827; }
-        .header p { margin: 2px 0; }
+        .container { width: 100%; max-width: 900px; margin: 0 auto; }
 
-        h4 { margin-bottom: 6px; }
+        h1, h2, h3, h4, h5, h6 {
+            margin: 0;
+            color: #1e293b;
+        }
 
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        p { margin: 2px 0; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td {
-            border: 1px solid #ccc;
-            padding: 8px;
+            padding: 8px 10px;
+            border: 1px solid #e5e7eb;
             vertical-align: top;
         }
         th {
-            background-color: #f3f4f6;
+            background: #f9fafb;
+            color: #111827;
             text-align: left;
-            color: #111;
             font-weight: 600;
         }
-        td { color: #333; }
-        .total-row { background-color: #f9fafb; font-weight: bold; }
+        td { color: #374151; }
         .text-right { text-align: right; }
         .text-center { text-align: center; }
         .text-left { text-align: left; }
 
-        .section { margin-top: 20px; }
+        /* ===============================
+           HEADER SECTION
+        =============================== */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 25px;
+            border-bottom: 2px solid #1e40af;
+            padding-bottom: 10px;
+        }
+        .header h1 {
+            font-size: 26px;
+            color: #1e40af;
+            letter-spacing: 0.5px;
+        }
+        .brand {
+            text-align: right;
+        }
+        .brand h3 {
+            font-size: 18px;
+            color: #111827;
+        }
+        .brand small {
+            color: #6b7280;
+        }
+
+        /* ===============================
+           TABLE & TOTALS
+        =============================== */
+        .items th { background: #f3f4f6; }
+        .total-row td {
+            font-weight: bold;
+            background: #f9fafb;
+        }
+        .highlight {
+            color: #16a34a;
+        }
+        .danger {
+            color: #dc2626;
+        }
+
+        /* ===============================
+           FOOTER
+        =============================== */
         .footer {
             text-align: center;
-            margin-top: 35px;
+            margin-top: 40px;
+            padding-top: 12px;
             font-size: 12px;
-            color: #777;
+            color: #6b7280;
             border-top: 1px solid #e5e7eb;
-            padding-top: 10px;
+        }
+
+        /* ===============================
+           RESPONSIVE / PRINT STYLES
+        =============================== */
+        @media print {
+            body { -webkit-print-color-adjust: exact; }
+            .no-print { display: none; }
+            .container { width: 100%; }
         }
     </style>
 </head>
@@ -61,15 +117,15 @@
                 <p><strong>Processed by:</strong> {{ $sale->user->name }}</p>
             @endif
         </div>
-        <div style="text-align:right;">
+        <div class="brand">
             <h3>{{ config('app.name', 'Stock Manager') }}</h3>
-            <p>Professional Stock Management System</p>
+            <small>Professional Stock Management System</small>
         </div>
     </div>
 
     {{-- 🔹 Customer Info --}}
-    <div class="section">
-        <h4>Bill To:</h4>
+    <div style="margin-bottom: 20px;">
+        <h4 style="margin-bottom: 6px; color:#1f2937;">Bill To:</h4>
         @if($sale->customer)
             <p><strong>Name:</strong> {{ $sale->customer->name }}</p>
             @if($sale->customer->phone)
@@ -84,13 +140,13 @@
     </div>
 
     {{-- 🔹 Items --}}
-    <table>
+    <table class="items">
         <thead>
             <tr>
                 <th>Product</th>
                 <th class="text-center">Qty</th>
-                <th class="text-right">Unit Price</th>
-                <th class="text-right">Subtotal</th>
+                <th class="text-right">Unit Price (RWF)</th>
+                <th class="text-right">Subtotal (RWF)</th>
             </tr>
         </thead>
         <tbody>
@@ -113,53 +169,61 @@
             </tr>
             <tr class="total-row">
                 <td colspan="3" class="text-right">Paid:</td>
-                <td class="text-right">{{ number_format($sale->amount_paid ?? 0, 2) }}</td>
+                <td class="text-right highlight">{{ number_format($sale->amount_paid ?? 0, 2) }}</td>
             </tr>
             <tr class="total-row">
                 <td colspan="3" class="text-right">Balance:</td>
-                <td class="text-right" style="color: {{ $balance > 0 ? 'red' : 'green' }};">
+                <td class="text-right {{ $balance > 0 ? 'danger' : 'highlight' }}">
                     {{ number_format($balance, 2) }}
                 </td>
             </tr>
         </tfoot>
     </table>
 
-    {{-- 🔹 Linked Loan (if any) --}}
+    {{-- 🔹 Linked Loan --}}
     @if($sale->loan)
-        <div class="section" style="margin-top:25px;">
-            <h4>Linked Loan</h4>
+        <div style="margin-top: 30px;">
+            <h4 style="margin-bottom: 6px; color:#1f2937;">Linked Loan</h4>
             <table>
-                <tr>
-                    <th>Loan Type</th>
-                    <td>{{ ucfirst($sale->loan->type) }}</td>
-                </tr>
-                <tr>
-                    <th>Amount</th>
-                    <td>{{ number_format($sale->loan->amount, 2) }}</td>
-                </tr>
-                <tr>
-                    <th>Status</th>
-                    <td>{{ ucfirst($sale->loan->status) }}</td>
-                </tr>
-                <tr>
-                    <th>Loan Date</th>
-                    <td>{{ $sale->loan->loan_date }}</td>
-                </tr>
-                @if($sale->loan->due_date)
-                <tr>
-                    <th>Due Date</th>
-                    <td>{{ $sale->loan->due_date }}</td>
-                </tr>
-                @endif
+                <tbody>
+                    <tr>
+                        <th>Loan Type</th>
+                        <td>{{ ucfirst($sale->loan->type) }}</td>
+                    </tr>
+                    <tr>
+                        <th>Amount</th>
+                        <td>{{ number_format($sale->loan->amount, 2) }}</td>
+                    </tr>
+                    <tr>
+                        <th>Status</th>
+                        <td>{{ ucfirst($sale->loan->status) }}</td>
+                    </tr>
+                    <tr>
+                        <th>Loan Date</th>
+                        <td>{{ \Carbon\Carbon::parse($sale->loan->loan_date)->format('Y-m-d') }}</td>
+                    </tr>
+                    @if($sale->loan->due_date)
+                        <tr>
+                            <th>Due Date</th>
+                            <td>{{ \Carbon\Carbon::parse($sale->loan->due_date)->format('Y-m-d') }}</td>
+                        </tr>
+                    @endif
+                    @if($sale->loan->notes)
+                        <tr>
+                            <th>Notes</th>
+                            <td>{{ $sale->loan->notes }}</td>
+                        </tr>
+                    @endif
+                </tbody>
             </table>
         </div>
     @endif
 
     {{-- 🔹 Notes --}}
     @if($sale->notes)
-        <div class="section">
-            <strong>Notes:</strong>
-            <p>{{ $sale->notes }}</p>
+        <div style="margin-top: 25px;">
+            <h4 style="margin-bottom: 6px; color:#1f2937;">Notes:</h4>
+            <p style="white-space: pre-line;">{{ $sale->notes }}</p>
         </div>
     @endif
 

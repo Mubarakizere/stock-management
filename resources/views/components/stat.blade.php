@@ -25,35 +25,42 @@
         }
     }
 
-    $formatted = is_numeric($value) ? number_format($value, abs($value) >= 1000 ? 0 : 2) : $value;
+    $formatted = is_numeric($value)
+        ? number_format($value, abs($value) >= 1000 ? 0 : 2)
+        : $value;
 @endphp
 
-<div class="relative group p-5 rounded-2xl
+<div class="relative group p-4 sm:p-5 rounded-2xl
             border border-gray-300 dark:border-gray-700
             bg-white dark:bg-gray-800/80
             backdrop-blur-sm
             shadow-sm hover:shadow-lg
-            transition-all duration-500 overflow-hidden">
+            transition-all duration-500 overflow-hidden
+            flex flex-col justify-between min-w-[160px] sm:min-w-[180px]">
 
-    {{-- Subtle hover gradient --}}
+    {{-- Hover Gradient --}}
     <div class="absolute inset-0 opacity-0 group-hover:opacity-100 transition duration-700
                 bg-gradient-to-br from-indigo-100/40 via-transparent to-transparent dark:from-indigo-900/30"></div>
 
     {{-- Label & Icon --}}
-    <div class="relative flex items-center justify-between">
-        <span class="text-sm font-medium text-gray-600 dark:text-gray-400">{{ $label }}</span>
-        <i data-lucide="{{ $selectedIcon }}" class="w-5 h-5 {{ $selectedColor }}"></i>
+    <div class="relative flex items-center justify-between gap-2 flex-wrap">
+        <span class="text-[0.8rem] sm:text-sm font-medium text-gray-600 dark:text-gray-400 leading-tight">
+            {{ $label }}
+        </span>
+        <i data-lucide="{{ $selectedIcon }}" class="w-4 h-4 sm:w-5 sm:h-5 {{ $selectedColor }}"></i>
     </div>
 
     {{-- Value --}}
-    <div class="mt-3 flex items-end gap-1">
-        <span class="count-up text-3xl font-bold {{ $selectedColor }}" data-value="{{ $value }}">
+    <div class="mt-2 sm:mt-3 flex items-end gap-1 flex-wrap">
+        <span class="count-up text-2xl sm:text-3xl font-bold {{ $selectedColor }}"
+              data-value="{{ $value }}">
             {{ $formatted }}
         </span>
-        <span class="text-sm text-gray-400 dark:text-gray-500 mb-0.5">RWF</span>
+        <span class="text-xs sm:text-sm text-gray-400 dark:text-gray-500 mb-0.5">RWF</span>
     </div>
 </div>
 
+{{-- Count-up Animation --}}
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     document.querySelectorAll('.count-up').forEach(el => {
