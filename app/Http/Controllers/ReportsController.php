@@ -161,28 +161,100 @@ class ReportsController extends Controller
     /**
      * 📄 Export Finance Report (PDF)
      */
-    public function exportFinancePdf(Request $request)
-    {
-        $start = $request->input('start_date');
-        $end   = $request->input('end_date');
+    /**
+ * 📄 Export Finance Report (PDF)
+ */
+public function exportFinancePdf(Request $request)
+{
+    $start = $request->input('start_date');
+    $end   = $request->input('end_date');
 
-        $credits = DebitCredit::where('type', 'credit')
-            ->whereBetween('created_at', [$start, $end])
-            ->sum('amount');
+    // =========================
+    // 🔹 Overall Summary
+    // =========================
+    $credits = DebitCredit::where('type', 'credit')
+        ->whereBetween('created_at', [$start, $end])
+        ->sum('amount');
 
-        $debits = DebitCredit::where('type', 'debit')
-            ->whereBetween('created_at', [$start, $end])
-            ->sum('amount');
+    $debits = DebitCredit::where('type', 'debit')
+        ->whereBetween('created_at', [$start, $end])
+        ->sum('amount');
 
-        $netBalance = $credits - $debits;
-        $totalProfit = SaleItem::sum('profit');
+    $netBalance = $credits - $debits;
+    $totalProfit = SaleItem::whereBetween('created_at', [$start, $end])->sum('profit');
 
-        $pdf = PDF::loadView('reports.pdf.finance', compact(
-            'start', 'end', 'credits', 'debits', 'netBalance', 'totalProfit'
-        ));
+    // =========================
+    // 🔹 Category Breakdown
+    // =========================
+    // Sales (from transactions or debit/credit)
+    $salesCredits = Sale::whereBetween('sale_date', [$start, $end])->sum('total_amount');
+    $salesDebits = 0; // sales usually don’t have direct debits
 
-        return $pdf->download("finance_report_{$start}_to_{$end}.pdf");
-    }
+    // Purchases
+    $purchaseCredits = 0; // normally no credit inflow from purchases
+    $purchaseDebits = Purchase::whereBetween('purchase_date', [$start, $end])->sum('total_amount');
+
+    // Loans
+    $loanCredits = Loan::where('type', 'taken')
+        ->whereBetween('created_at', [$start, $end])
+        ->sum('amount');
+    $loanDebits = Loan::where('type', 'given')
+        ->whereBetween('created_at', [$start, $end])
+        ->sum('amount');
+
+    // Other transactions (debit/credit records not tied to sales or purchases)
+    $otherCredits = DebitCredit::where('type', 'credit')
+        ->whereNull('customer_id')
+        ->whereNull('supplier_id')
+        ->whereBetween('created_at', [$start, $end])
+        ->sum('amount');
+
+    $otherDebits = DebitCredit::where('type', 'debit')
+        ->whereNull('customer_id')
+        ->whereNull('supplier_id')
+        ->whereBetween('created_at', [$start, $end])
+        ->sum('amount');
+
+    // =========================
+    // 🔹 Ratios
+    // =========================
+    $totalSales = Sale::whereBetween('sale_date', [$start, $end])->sum('total_amount');
+    $totalPurchases = Purchase::whereBetween('purchase_date', [$start, $end])->sum('total_amount');
+    $totalExpenses = $totalPurchases + $debits;
+
+    $profitMargin = $totalSales > 0 ? ($totalProfit / $totalSales) * 100 : 0;
+    $expenseRatio = $totalSales > 0 ? ($totalExpenses / $totalSales) * 100 : 0;
+
+    $lastMonthSales = Sale::whereBetween('sale_date', [
+        Carbon::now()->subMonths(1)->startOfMonth(),
+        Carbon::now()->subMonths(1)->endOfMonth(),
+    ])->sum('total_amount');
+
+    $currentMonthSales = Sale::whereBetween('sale_date', [
+        Carbon::now()->startOfMonth(),
+        Carbon::now()->endOfMonth(),
+    ])->sum('total_amount');
+
+    $revenueGrowth = $lastMonthSales > 0
+        ? (($currentMonthSales - $lastMonthSales) / $lastMonthSales) * 100
+        : 0;
+
+    // =========================
+    // 🔹 Generate PDF
+    // =========================
+    $pdf = PDF::loadView('reports.pdf.finance', compact(
+        'start', 'end',
+        'credits', 'debits', 'netBalance', 'totalProfit',
+        'salesCredits', 'salesDebits',
+        'purchaseCredits', 'purchaseDebits',
+        'loanCredits', 'loanDebits',
+        'otherCredits', 'otherDebits',
+        'profitMargin', 'expenseRatio', 'revenueGrowth'
+    ))->setPaper('a4', 'portrait');
+
+    return $pdf->download("finance_report_{$start}_to_{$end}.pdf");
+}
+
 
     /**
      * 📈 Export Business Insights Report (PDF)
