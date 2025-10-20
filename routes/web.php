@@ -8,6 +8,7 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\LoanController;
+use App\Http\Controllers\UserController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\DebitCreditController;
 use App\Http\Controllers\DashboardController;
@@ -51,30 +52,31 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // =======================
     Route::get('/dashboard', [DashboardController::class, 'index'])
         ->name('dashboard')
-        ->middleware('role:admin,manager,cashier');
+        ->middleware('role:admin|manager|cashier|accountant');
 
     // 🔄 AJAX Sales Chart (30-day)
     Route::get('/dashboard/sales-chart', [DashboardController::class, 'salesChartData'])
         ->name('dashboard.sales.chart')
-        ->middleware('role:admin,manager');
+        ->middleware('role:admin|manager');
 
     // =======================
     // 👥 User Management (Admin only)
     // =======================
     Route::middleware('role:admin')->group(function () {
-        Route::get('/users', fn() => view('users.index'))->name('users.index');
+        Route::resource('users', UserController::class)->except(['show']);
+        Route::resource('roles', \App\Http\Controllers\RoleController::class)->except(['show']);
     });
 
     // =======================
     // 🧾 Finance & Debits / Credits
     // =======================
     Route::resource('debits-credits', DebitCreditController::class)
-        ->middleware('role:admin,manager,cashier');
+        ->middleware('role:admin|manager|cashier|accountant');
 
     // =======================
     // 💳 Transactions
     // =======================
-    Route::middleware(['role:admin,manager'])->group(function () {
+    Route::middleware(['role:admin|manager|accountant'])->group(function () {
         Route::get('/transactions', [TransactionController::class, 'index'])->name('transactions.index');
         Route::get('/transactions/create', [TransactionController::class, 'create'])->name('transactions.create');
         Route::post('/transactions', [TransactionController::class, 'store'])->name('transactions.store');
@@ -91,82 +93,76 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // =======================
     // 📦 Inventory Management
     // =======================
-    Route::resource('categories', CategoryController::class)->middleware('role:admin,manager');
-    Route::resource('products', ProductController::class)->middleware('role:admin,manager,cashier');
+    Route::resource('categories', CategoryController::class)->middleware('role:admin|manager');
+    Route::resource('products', ProductController::class)->middleware('role:admin|manager|cashier');
     Route::get('/products/{product}', [ProductController::class, 'show'])
-    ->name('products.show')
-    ->middleware('role:admin,manager,cashier');
+        ->name('products.show')
+        ->middleware('role:admin|manager|cashier');
 
-    Route::resource('suppliers', SupplierController::class)->middleware('role:admin,manager');
-    Route::resource('customers', CustomerController::class)->middleware('role:admin,manager,cashier');
+    Route::resource('suppliers', SupplierController::class)->middleware('role:admin|manager');
+    Route::resource('customers', CustomerController::class)->middleware('role:admin|manager|cashier');
 
     // =======================
     // 📊 Stock Movements
     // =======================
     Route::get('/stock-history', [StockMovementController::class, 'index'])
         ->name('stock.history')
-        ->middleware('role:admin,manager,cashier');
+        ->middleware('role:admin|manager|cashier');
 
     Route::get('/stock-history/export/csv', [StockMovementController::class, 'exportCsv'])
         ->name('stock.history.export.csv')
-        ->middleware('role:admin,manager');
+        ->middleware('role:admin|manager');
 
     Route::get('/stock-history/export/pdf', [StockMovementController::class, 'exportPdf'])
         ->name('stock.history.export.pdf')
-        ->middleware('role:admin,manager');
+        ->middleware('role:admin|manager');
 
     // =======================
     // 💰 Purchases & Sales
     // =======================
-    Route::resource('purchases', PurchaseController::class)->middleware('role:admin,manager');
-    Route::resource('sales', SaleController::class)->middleware('role:admin,manager,cashier');
+    Route::resource('purchases', PurchaseController::class)->middleware('role:admin|manager');
+    Route::resource('sales', SaleController::class)->middleware('role:admin|manager|cashier');
 
     // 🧾 Invoices
     Route::get('/sales/{sale}/invoice', [SaleController::class, 'invoice'])
         ->name('sales.invoice')
-        ->middleware('role:admin,manager,cashier');
+        ->middleware('role:admin|manager|cashier');
 
     Route::get('/purchases/{purchase}/invoice', [PurchaseController::class, 'invoice'])
         ->name('purchases.invoice')
-        ->middleware('role:admin,manager');
+        ->middleware('role:admin|manager');
 
     // =======================
     // 🏦 Loans Management
     // =======================
     Route::middleware(['auth'])->group(function () {
 
-    // Loan management
-    Route::middleware('role:admin,manager')->group(function () {
-        Route::resource('loans', LoanController::class);
+        Route::middleware('role:admin|manager|accountant')->group(function () {
+            Route::resource('loans', LoanController::class);
+        });
+
+        // Loan report export (admin only)
+        Route::get('loans/export/pdf', [LoanController::class, 'exportPdf'])
+            ->name('loans.export.pdf')
+            ->middleware('role:admin');
+
+        Route::prefix('loans/{loan}')->middleware('auth')->group(function () {
+            Route::get('payments/create', [\App\Http\Controllers\LoanPaymentController::class, 'create'])
+                ->name('loan-payments.create');
+            Route::post('payments', [\App\Http\Controllers\LoanPaymentController::class, 'store'])
+                ->name('loan-payments.store');
+        });
     });
 
-    // Loan report export (admin only)
-    Route::get('loans/export/pdf', [LoanController::class, 'exportPdf'])
-        ->name('loans.export.pdf')
-        ->middleware('role:admin');
-    Route::prefix('loans/{loan}')->middleware('auth')->group(function () {
-    Route::get('payments/create', [\App\Http\Controllers\LoanPaymentController::class, 'create'])
-        ->name('loan-payments.create');
-
-    Route::post('payments', [\App\Http\Controllers\LoanPaymentController::class, 'store'])
-        ->name('loan-payments.store');
-});
-});
-
-
-
     // =======================
+    // 📈 Reports (Admin & Accountant)
     // =======================
-// 📈 Reports (Admin only)
-// =======================
-    Route::middleware('role:admin')->group(function () {
-    Route::get('/reports', [ReportsController::class, 'index'])->name('reports.index');
-    Route::get('/reports/export/sales/csv', [ReportsController::class, 'exportSalesCsv'])->name('reports.export.sales.csv');
-    Route::get('/reports/export/finance/pdf', [ReportsController::class, 'exportFinancePdf'])->name('reports.export.finance.pdf');
-    Route::get('/reports/export/insights/pdf', [ReportsController::class, 'exportInsightsPdf'])->name('reports.export.insights.pdf');
-});
-
-
+    Route::middleware('role:admin|accountant')->group(function () {
+        Route::get('/reports', [ReportsController::class, 'index'])->name('reports.index');
+        Route::get('/reports/export/sales/csv', [ReportsController::class, 'exportSalesCsv'])->name('reports.export.sales.csv');
+        Route::get('/reports/export/finance/pdf', [ReportsController::class, 'exportFinancePdf'])->name('reports.export.finance.pdf');
+        Route::get('/reports/export/insights/pdf', [ReportsController::class, 'exportInsightsPdf'])->name('reports.export.insights.pdf');
+    });
 
     // =======================
     // 👤 User Profile (Breeze)

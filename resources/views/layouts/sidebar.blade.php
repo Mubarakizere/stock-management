@@ -22,7 +22,10 @@
     <div class="flex-1 overflow-y-auto custom-scrollbar">
         <nav class="px-3 py-3 space-y-1 text-gray-700 dark:text-gray-200">
 
-            @php $user = Auth::user(); @endphp
+            @php
+                use Illuminate\Support\Facades\Auth;
+                $user = Auth::user();
+            @endphp
 
             {{-- 🔹 Dashboard --}}
             <x-sidebar-link href="{{ route('dashboard') }}" :active="request()->routeIs('dashboard')">
@@ -30,8 +33,9 @@
             </x-sidebar-link>
 
             {{-- 🔹 Admin --}}
-            @if($user->hasRoleName('admin'))
+            @if($user->hasRole('admin'))
                 <x-sidebar-link href="{{ route('users.index') }}" :active="request()->routeIs('users.*')">Users</x-sidebar-link>
+                <x-sidebar-link href="{{ route('roles.index') }}" :active="request()->routeIs('roles.*')">Roles</x-sidebar-link>
                 <x-sidebar-link href="{{ route('categories.index') }}" :active="request()->routeIs('categories.*')">Categories</x-sidebar-link>
                 <x-sidebar-link href="{{ route('products.index') }}" :active="request()->routeIs('products.*')">Products</x-sidebar-link>
                 <x-sidebar-link href="{{ route('suppliers.index') }}" :active="request()->routeIs('suppliers.*')">Suppliers</x-sidebar-link>
@@ -46,25 +50,24 @@
             @endif
 
             {{-- 🔹 Manager --}}
-            @if($user->hasRoleName('manager'))
+            @if($user->hasRole('manager'))
                 <x-sidebar-link href="{{ route('sales.index') }}" :active="request()->routeIs('sales.*')">Sales</x-sidebar-link>
                 <x-sidebar-link href="{{ route('products.index') }}" :active="request()->routeIs('products.*')">Products</x-sidebar-link>
                 <x-sidebar-link href="{{ route('suppliers.index') }}" :active="request()->routeIs('suppliers.*')">Suppliers</x-sidebar-link>
                 <x-sidebar-link href="{{ route('transactions.index') }}" :active="request()->routeIs('transactions.*')">Transactions</x-sidebar-link>
                 <x-sidebar-link href="{{ route('customers.index') }}" :active="request()->routeIs('customers.*')">Customers</x-sidebar-link>
                 <x-sidebar-link href="{{ route('stock.history') }}" :active="request()->routeIs('stock.history*')">Stock Movements</x-sidebar-link>
-                <x-sidebar-link href="{{ route('reports.index') }}" :active="request()->routeIs('reports.*')">Reports</x-sidebar-link>
             @endif
 
             {{-- 🔹 Cashier --}}
-            @if($user->hasRoleName('cashier'))
+            @if($user->hasRole('cashier'))
                 <x-sidebar-link href="{{ route('sales.index') }}" :active="request()->routeIs('sales.*')">Sales</x-sidebar-link>
                 <x-sidebar-link href="{{ route('customers.index') }}" :active="request()->routeIs('customers.*')">Customers</x-sidebar-link>
                 <x-sidebar-link href="{{ route('stock.history') }}" :active="request()->routeIs('stock.history*')">Stock Movements</x-sidebar-link>
             @endif
 
             {{-- 🔹 Accountant --}}
-            @if($user->hasRoleName('accountant'))
+            @if($user->hasRole('accountant'))
                 <x-sidebar-link href="{{ route('debits-credits.index') }}" :active="request()->routeIs('debits-credits.*')">Debits & Credits</x-sidebar-link>
                 <x-sidebar-link href="{{ route('loans.index') }}" :active="request()->routeIs('loans.*')">Loans</x-sidebar-link>
                 <x-sidebar-link href="{{ route('transactions.index') }}" :active="request()->routeIs('transactions.*')">Transactions</x-sidebar-link>
@@ -86,7 +89,7 @@
             <p class="text-xs text-gray-400 mt-4 px-3 pb-4">
                 Logged in as
                 <span class="font-medium text-gray-700 dark:text-gray-200">
-                    {{ ucfirst($user->roleNames()[0] ?? 'User') }}
+                    {{ ucfirst($user->getRoleNames()->first() ?? 'User') }}
                 </span>
             </p>
         </nav>

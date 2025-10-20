@@ -2,17 +2,19 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use Spatie\Permission\Models\Role as SpatieRole;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
-class Role extends Model
+class Role extends SpatieRole
 {
-    protected $table = 'roles';
-    public $timestamps = true; // set to false if your roles table has no timestamps
-    protected $guarded = [];
+    protected $fillable = ['name', 'guard_name'];
 
+    /**
+     * Users that belong to this role.
+     */
     public function users(): BelongsToMany
     {
-        return $this->belongsToMany(User::class, 'role_user', 'role_id', 'user_id');
+        return $this->belongsToMany(User::class, 'model_has_roles', 'role_id', 'model_id')
+                    ->wherePivot('model_type', '=', 'App\\Models\\User');
     }
 }

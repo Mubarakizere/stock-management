@@ -2,7 +2,6 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}"
       x-data
       x-init="
-          // ✅ Dark mode initialization
           if (localStorage.theme === 'dark') {
               document.documentElement.classList.add('dark');
           } else {
@@ -22,12 +21,22 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <meta name="theme-color" content="#4f46e5">
 
+    <!-- ✅ PWA Essentials -->
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" href="/favicon.ico">
+    <link rel="apple-touch-icon" sizes="192x192" href="/images/icons/192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
     <!-- Prevent white flash -->
-    <style>[x-cloak]{display:none!important}html.dark body{background:#0f172a;color:#f8fafc}</style>
+    <style>
+        [x-cloak]{display:none!important}
+        html.dark body{background:#0f172a;color:#f8fafc}
+    </style>
 </head>
 
 <body class="bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 font-sans antialiased transition-colors duration-300"
-      x-data="{ sidebarOpen: window.innerWidth >= 1024, userMenu:false }"
+      x-data="{ sidebarOpen: window.innerWidth >= 1024 }"
       @resize.window="sidebarOpen = window.innerWidth >= 1024">
 
 {{-- 🔔 Offline Banner --}}
@@ -51,7 +60,6 @@
 
         {{-- ====== HEADER ====== --}}
         <header class="flex items-center justify-between bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm px-4 lg:px-6 py-3">
-            {{-- Left: page title + sidebar toggle --}}
             <div class="flex items-center gap-3">
                 <button class="text-gray-600 dark:text-gray-300 hover:text-indigo-600 lg:hidden" @click="sidebarOpen = true">
                     <i data-lucide="menu" class="w-6 h-6"></i>
@@ -61,9 +69,7 @@
                 </h1>
             </div>
 
-            {{-- Right: actions --}}
             <div class="flex items-center gap-4">
-
                 {{-- 🌙 Dark Mode Toggle --}}
                 <button
                     @click="
@@ -93,21 +99,34 @@
                 </div>
 
                 {{-- 👤 User Dropdown --}}
-                <div class="relative" @click.away="userMenu=false">
+                <div class="relative" x-data="{ userMenu: false }" @click.away="userMenu = false">
                     <button @click="userMenu = !userMenu"
                             class="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition">
-                        <div class="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center">
-                            <span class="text-indigo-700 dark:text-indigo-300 text-sm font-semibold">
-                                {{ strtoupper(substr(Auth::user()->name ?? 'U', 0, 1)) }}
-                            </span>
-                        </div>
-                        <span class="hidden sm:block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {{ Auth::user()->name ?? 'User' }}
+                        @php
+                            $user = Auth::user();
+                            $photo = $user?->photo ? asset('storage/' . $user->photo) : null;
+                        @endphp
+
+                        @if($photo)
+                            <img src="{{ $photo }}"
+                                 alt="{{ $user->name }}"
+                                 class="w-8 h-8 rounded-full object-cover border border-gray-300 dark:border-gray-600">
+                        @else
+                            <div class="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center">
+                                <span class="text-indigo-700 dark:text-indigo-300 text-sm font-semibold">
+                                    {{ strtoupper(substr($user->name ?? 'U', 0, 1)) }}
+                                </span>
+                            </div>
+                        @endif
+
+                        <span class="hidden sm:block text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[120px]">
+                            {{ $user->name ?? 'User' }}
                         </span>
+
                         <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400"></i>
                     </button>
 
-                    {{-- Dropdown menu --}}
+                    {{-- 🔽 Dropdown --}}
                     <div x-show="userMenu" x-cloak x-transition
                          class="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 z-50">
                         <a href="{{ route('profile.edit') }}"
@@ -135,14 +154,31 @@
     </div>
 </div>
 
-{{-- 🔹 Lucide Icons --}}
+{{-- ✅ Global Toast Alerts --}}
+@if (session('success') || session('error') || session('warning') || session('info'))
+    <x-alert-toast />
+@endif
+
+{{-- ✅ Lucide Icons --}}
 <script type="module">
 import { createIcons, icons } from "https://cdn.jsdelivr.net/npm/lucide@0.454.0/+esm";
 document.addEventListener("DOMContentLoaded", () => createIcons({ icons }));
 </script>
 
-{{-- 🔹 Alpine Confirm Modal + Extra Scripts --}}
+{{-- ✅ Alpine Confirm Modal + Extra Scripts --}}
 <x-confirm-delete />
 @stack('scripts')
+
+<!-- ✅ PWA Service Worker Registration -->
+<script>
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js')
+            .then(reg => console.log('✅ Service Worker registered:', reg.scope))
+            .catch(err => console.error('❌ Service Worker registration failed:', err));
+    });
+}
+</script>
+
 </body>
 </html>
