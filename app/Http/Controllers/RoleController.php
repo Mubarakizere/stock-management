@@ -3,19 +3,44 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\Role;
-use Spatie\Permission\Models\Permission;
 use Illuminate\Support\Facades\DB;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\Models\Permission;
 
 class RoleController extends Controller
 {
     /**
      * Display a listing of roles.
      */
-    public function index()
+    public function index(Request $request)
     {
-        $roles = Role::withCount('users')->orderBy('name')->paginate(10);
-        return view('roles.index', compact('roles'));
+        $query = trim($request->get('q', ''));
+
+        // Eager-load users and permissions for drawer preview
+        $rolesQuery = Role::with(['users', 'permissions'])
+            ->withCount('users');
+
+        if ($query !== '') {
+            $rolesQuery->where(function ($qB) use ($query) {
+                $qB->where('name', 'like', "%{$query}%")
+                    ->orWhereHas('permissions', function ($p) use ($query) {
+                        $p->where('name', 'like', "%{$query}%");
+                    })
+                    ->orWhereHas('users', function ($u) use ($query) {
+                        $u->where('name', 'like', "%{$query}%");
+                    });
+            });
+        }
+
+        $roles = $rolesQuery
+            ->orderBy('name')
+            ->paginate(10)
+            ->withQueryString();
+
+        return view('roles.index', [
+            'roles' => $roles,
+            'query' => $query,
+        ]);
     }
 
     /**
@@ -23,12 +48,13 @@ class RoleController extends Controller
      */
     public function create()
     {
-        $permissions = Permission::orderBy('name')->get();
+        $permissions = $this->groupPermissions();
+
         return view('roles.create', compact('permissions'));
     }
 
     /**
-     * Store a newly created role.
+     * Store a newly created role in storage.
      */
     public function store(Request $request)
     {
@@ -39,7 +65,7 @@ class RoleController extends Controller
 
         DB::transaction(function () use ($request) {
             $role = Role::create([
-                'name'       => strtolower($request->name),
+                'name'       => strtolower(trim($request->name)),
                 'guard_name' => 'web',
             ]);
 
@@ -48,7 +74,9 @@ class RoleController extends Controller
             }
         });
 
-        return redirect()->route('roles.index')->with('success', 'Role created successfully.');
+        return redirect()
+            ->route('roles.index')
+            ->with('success', 'Role created successfully.');
     }
 
     /**
@@ -56,14 +84,18 @@ class RoleController extends Controller
      */
     public function edit(Role $role)
     {
-        $permissions = Permission::orderBy('name')->get();
-        $rolePermissions = $role->permissions->pluck('name')->toArray();
+        $permissions      = $this->groupPermissions();
+        $rolePermissions  = $role->permissions->pluck('name')->toArray();
 
-        return view('roles.edit', compact('role', 'permissions', 'rolePermissions'));
+        return view('roles.edit', [
+            'role'            => $role,
+            'permissions'     => $permissions,
+            'rolePermissions' => $rolePermissions,
+        ]);
     }
 
     /**
-     * Update the specified role.
+     * Update the specified role in storage.
      */
     public function update(Request $request, Role $role)
     {
@@ -73,23 +105,48 @@ class RoleController extends Controller
         ]);
 
         DB::transaction(function () use ($request, $role) {
-            $role->update(['name' => strtolower($request->name)]);
+            $role->update([
+                'name' => strtolower(trim($request->name)),
+            ]);
+
             $role->syncPermissions($request->permissions ?? []);
         });
 
-        return redirect()->route('roles.index')->with('success', 'Role updated successfully.');
+        return redirect()
+            ->route('roles.index')
+            ->with('success', 'Role updated successfully.');
     }
 
     /**
-     * Remove the specified role.
+     * Remove the specified role from storage.
      */
     public function destroy(Role $role)
     {
-        if ($role->name === 'admin') {
-            return redirect()->back()->with('error', 'The Admin role cannot be deleted.');
+        if (in_array($role->name, ['admin', 'manager'])) {
+            return redirect()
+                ->back()
+                ->with('error', 'System roles cannot be deleted.');
         }
 
         $role->delete();
-        return redirect()->route('roles.index')->with('success', 'Role deleted successfully.');
+
+        return redirect()
+            ->route('roles.index')
+            ->with('success', 'Role deleted successfully.');
+    }
+
+    /**
+     * Helper: Group permissions by their first prefix (module name).
+     *
+     * Example: "users.create", "users.edit" → group "Users"
+     */
+    private function groupPermissions()
+    {
+        $permissions = Permission::orderBy('name')->get();
+
+        return $permissions->groupBy(function ($permission) {
+            $parts = explode('.', $permission->name);
+            return ucfirst($parts[0] ?? 'General');
+        });
     }
 }

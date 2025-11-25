@@ -4,7 +4,6 @@
 @section('content')
 <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 
-    {{-- 🔹 Page Header --}}
     <div class="flex items-center justify-between">
         <h1 class="text-2xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <i data-lucide="user-plus" class="w-6 h-6 text-indigo-600 dark:text-indigo-400"></i>
@@ -15,7 +14,6 @@
         </a>
     </div>
 
-    {{-- 🔹 Flash Messages --}}
     @if(session('success'))
         <div class="rounded-lg bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 text-green-800 dark:text-green-300 px-4 py-3 text-sm">
             {{ session('success') }}
@@ -28,12 +26,10 @@
         </div>
     @endif
 
-    {{-- 🔹 Create Form --}}
     <form method="POST" action="{{ route('users.store') }}" enctype="multipart/form-data"
           class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-6 space-y-6">
         @csrf
 
-        {{-- 🖼 Profile Image Preview --}}
         <div x-data="{ preview: null }" class="flex flex-col sm:flex-row items-center gap-6">
             <div class="relative group">
                 <img
@@ -41,8 +37,6 @@
                     alt="User Preview"
                     class="w-28 h-28 rounded-xl object-cover border border-gray-300 dark:border-gray-600 shadow-md transition duration-300 group-hover:brightness-90"
                     onerror="this.src='https://ui-avatars.com/api/?name=User&color=ffffff&background=4f46e5'">
-
-                {{-- Hover Overlay --}}
                 <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 rounded-xl flex items-center justify-center transition">
                     <span class="text-white text-xs font-medium">Preview</span>
                 </div>
@@ -50,7 +44,6 @@
 
             <div class="w-full space-y-2">
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">Profile Photo (optional)</label>
-
                 <input type="file" name="profile_image" accept="image/*"
                        @change="preview = URL.createObjectURL($event.target.files[0])"
                        class="block w-full text-sm text-gray-700 dark:text-gray-200
@@ -59,14 +52,11 @@
                               file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0
                               file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100
                               dark:file:bg-gray-700 dark:file:text-gray-200">
-
                 <p class="text-xs text-gray-500 dark:text-gray-400">PNG, JPG, JPEG up to 30 MB</p>
             </div>
         </div>
 
-        {{-- 🧩 Basic Info --}}
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {{-- Full Name --}}
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Full Name</label>
                 <input type="text" name="name" value="{{ old('name') }}"
@@ -74,7 +64,6 @@
                        placeholder="Enter full name" required>
             </div>
 
-            {{-- Email --}}
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email Address</label>
                 <input type="email" name="email" value="{{ old('email') }}"
@@ -82,7 +71,6 @@
                        placeholder="user@example.com" required>
             </div>
 
-            {{-- Password --}}
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Password</label>
                 <input type="password" name="password"
@@ -90,7 +78,6 @@
                        placeholder="Enter password" required>
             </div>
 
-            {{-- Confirm Password --}}
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Confirm Password</label>
                 <input type="password" name="password_confirmation"
@@ -98,7 +85,6 @@
                        placeholder="Re-enter password" required>
             </div>
 
-            {{-- Role --}}
             <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Assign Role</label>
                 <select name="role" class="input input-bordered w-full dark:bg-gray-700 dark:text-gray-100" required>
@@ -112,7 +98,6 @@
             </div>
         </div>
 
-        {{-- 🔘 Buttons --}}
         <div class="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
             <a href="{{ route('users.index') }}" class="btn btn-outline text-sm px-4 py-2">Cancel</a>
             <button type="submit" class="btn btn-primary text-sm px-4 py-2 flex items-center gap-1">
