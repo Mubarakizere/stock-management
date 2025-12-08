@@ -20,10 +20,16 @@
             <span>Inter-Company Item Lending</span>
         </h1>
 
-        <a href="{{ route('item-loans.create') }}" class="btn btn-primary inline-flex items-center gap-2">
-            <i data-lucide="plus" class="w-4 h-4"></i>
-            New Loan
-        </a>
+        <div class="flex items-center gap-2">
+            <a href="{{ route('partner-companies.index') }}" class="btn btn-outline inline-flex items-center gap-2">
+                <i data-lucide="users" class="w-4 h-4"></i>
+                Manage Partners
+            </a>
+            <a href="{{ route('item-loans.create') }}" class="btn btn-primary inline-flex items-center gap-2">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                New Loan
+            </a>
+        </div>
     </div>
 
     {{-- Filters --}}
@@ -88,6 +94,7 @@
                 <tr>
                     <th class="px-4 py-3 text-left">Date</th>
                     <th class="px-4 py-3 text-left">Partner</th>
+                    <th class="px-4 py-3 text-left">Linked Product</th>
                     <th class="px-4 py-3 text-left">Item</th>
                     <th class="px-4 py-3 text-left">Direction</th>
                     <th class="px-4 py-3 text-right">Qty</th>
@@ -108,6 +115,15 @@
                 <tr class="hover:bg-gray-50/80 dark:hover:bg-gray-900/40">
                     <td class="px-4 py-3 whitespace-nowrap">{{ \Carbon\Carbon::parse($loan->loan_date)->format('Y-m-d') }}</td>
                     <td class="px-4 py-3">{{ $loan->partner->name ?? '—' }}</td>
+                    <td class="px-4 py-3">
+                        @if($loan->product)
+                            <span class="text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded">
+                                {{ $loan->product->name }}
+                            </span>
+                        @else
+                            <span class="text-xs text-gray-400">Manual</span>
+                        @endif
+                    </td>
                     <td class="px-4 py-3">
                         <div class="font-medium text-gray-900 dark:text-gray-100">{{ $loan->item_name }}</div>
                         @if ($loan->unit)

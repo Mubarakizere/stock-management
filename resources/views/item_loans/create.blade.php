@@ -29,7 +29,7 @@
         <div>
             <div class="flex items-center justify-between mb-1">
                 <label class="block text-sm font-medium">Partner Company <span class="text-red-600">*</span></label>
-                <button type="button" onclick="document.getElementById('createPartnerModal').showModal()" 
+                <button type="button" @click="$dispatch('open-partner-modal')" 
                         class="text-xs text-indigo-600 hover:text-indigo-500 font-medium flex items-center gap-1">
                     <i data-lucide="plus" class="w-3 h-3"></i> New Partner
                 </button>
@@ -108,33 +108,86 @@
 </div>
 
 {{-- Create Partner Modal --}}
-<dialog id="createPartnerModal" class="modal">
-    <div class="modal-box max-w-md bg-white dark:bg-gray-800">
-        <form method="dialog">
-            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
-        </form>
-        <h3 class="font-bold text-lg mb-4">Add New Partner</h3>
-        <form id="createPartnerForm" class="space-y-4">
+{{-- Create Partner Modal (Alpine) --}}
+<div x-data="{ open: false }"
+     @open-partner-modal.window="open = true"
+     @close-partner-modal.window="open = false"
+     x-show="open"
+     x-cloak
+     class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+     x-transition>
+    
+    <div @click.outside="open = false"
+         class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
+        
+        {{-- Header --}}
+        <div class="bg-gray-50 dark:bg-gray-900/50 px-6 py-4 border-b dark:border-gray-700 flex items-center justify-between">
+            <h3 class="font-bold text-lg flex items-center gap-2 text-gray-800 dark:text-gray-100">
+                <div class="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg text-indigo-600 dark:text-indigo-400">
+                    <i data-lucide="building-2" class="w-5 h-5"></i>
+                </div>
+                Add New Partner
+            </h3>
+            <button @click="open = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+
+        {{-- Body --}}
+        <form id="createPartnerForm" class="p-6 space-y-5">
             @csrf
             <div>
-                <label class="block text-sm font-medium mb-1">Company Name <span class="text-red-600">*</span></label>
-                <input type="text" name="name" required class="w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900">
+                <label class="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-300">
+                    Company Name <span class="text-red-500">*</span>
+                </label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                        <i data-lucide="briefcase" class="w-4 h-4"></i>
+                    </div>
+                    <input type="text" name="name" required 
+                           class="input input-bordered w-full pl-10 bg-white dark:bg-gray-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                </div>
             </div>
-            <div>
-                <label class="block text-sm font-medium mb-1">Contact Person</label>
-                <input type="text" name="contact_person" class="w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900">
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-300">Contact Person</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                            <i data-lucide="user" class="w-4 h-4"></i>
+                        </div>
+                        <input type="text" name="contact_person" 
+                               class="input input-bordered w-full pl-10 bg-white dark:bg-gray-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1.5 text-gray-700 dark:text-gray-300">Phone</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                            <i data-lucide="phone" class="w-4 h-4"></i>
+                        </div>
+                        <input type="text" name="phone" 
+                               class="input input-bordered w-full pl-10 bg-white dark:bg-gray-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+                    </div>
+                </div>
             </div>
-            <div>
-                <label class="block text-sm font-medium mb-1">Phone</label>
-                <input type="text" name="phone" class="w-full rounded-lg border-gray-300 dark:border-gray-700 dark:bg-gray-900">
-            </div>
-            <div class="flex justify-end gap-2 mt-6">
-                <button type="button" class="btn btn-ghost" onclick="document.getElementById('createPartnerModal').close()">Cancel</button>
-                <button type="submit" class="btn btn-primary" id="savePartnerBtn">Save Partner</button>
+
+            {{-- Footer --}}
+            <div class="flex justify-end gap-3 mt-8 pt-2">
+                <button type="button" class="btn btn-ghost text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800" 
+                        @click="open = false">
+                    Cancel
+                </button>
+                <button type="submit" class="btn btn-primary px-6" id="savePartnerBtn">
+                    <span class="flex items-center gap-2">
+                        <i data-lucide="check" class="w-4 h-4"></i>
+                        Save Partner
+                    </span>
+                </button>
             </div>
         </form>
     </div>
-</dialog>
+</div>
 
 <script>
     document.getElementById('createPartnerForm').addEventListener('submit', async function(e) {
@@ -143,6 +196,10 @@
         const originalText = btn.innerText;
         btn.innerText = 'Saving...';
         btn.disabled = true;
+
+        // Clear previous errors
+        document.querySelectorAll('.error-msg').forEach(el => el.remove());
+        document.querySelectorAll('.input-error').forEach(el => el.classList.remove('input-error'));
 
         try {
             const formData = new FormData(this);
@@ -157,20 +214,34 @@
 
             const result = await response.json();
 
-            if (result.success) {
+            if (response.ok && result.success) {
                 // Add to select and select it
                 const select = document.querySelector('select[name="partner_id"]');
                 const option = new Option(result.partner.name, result.partner.id, true, true);
                 select.add(option);
                 
                 // Close modal and reset form
-                document.getElementById('createPartnerModal').close();
+                window.dispatchEvent(new CustomEvent('close-partner-modal'));
                 this.reset();
                 
                 // Optional: Show toast/alert
                 // alert('Partner created!'); 
             } else {
-                alert(result.message || 'Failed to create partner');
+                // Handle Validation Errors
+                if (result.errors) {
+                    for (const [key, messages] of Object.entries(result.errors)) {
+                        const input = this.querySelector(`[name="${key}"]`);
+                        if (input) {
+                            input.classList.add('input-error'); // Add error class if using DaisyUI or similar
+                            const errorDiv = document.createElement('div');
+                            errorDiv.className = 'text-red-500 text-xs mt-1 error-msg';
+                            errorDiv.innerText = messages[0];
+                            input.parentNode.appendChild(errorDiv);
+                        }
+                    }
+                } else {
+                    alert(result.message || 'Failed to create partner');
+                }
             }
         } catch (error) {
             console.error('Error:', error);
