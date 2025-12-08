@@ -14,20 +14,20 @@
 
     <!-- Scripts -->
     @vite(['resources/css/app.css', 'resources/js/app.js'])
-    
+
     <style>
         body { font-family: 'Inter', sans-serif; }
     </style>
 </head>
 <body class="h-full">
     <div class="min-h-full flex">
-        
+
         <!-- Left Side: Branding & Visuals -->
         <div class="hidden lg:flex flex-1 relative bg-indigo-900 text-white overflow-hidden">
             <div class="absolute inset-0 bg-gradient-to-br from-indigo-600 to-indigo-900 opacity-90"></div>
-            <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop" 
+            <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop"
                  alt="Background" class="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-20">
-            
+
             <div class="relative z-10 flex flex-col justify-between p-12 w-full">
                 <div>
                     <div class="flex items-center gap-3">
@@ -37,10 +37,10 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
                             </svg>
                         </div>
-                        <span class="text-2xl font-bold tracking-tight">KingWine</span>
+                        <span class="text-2xl font-bold tracking-tight">Nezerwa Plus</span>
                     </div>
                 </div>
-                
+
                 <div class="space-y-6">
                     <blockquote class="text-2xl font-medium leading-relaxed text-indigo-100">
                         "Manage your stock, track sales, and grow your business with confidence. The premium solution for modern commerce."
@@ -56,9 +56,9 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="text-indigo-300 text-xs">
-                    &copy; {{ date('Y') }} KingWine. All rights reserved.
+                    &copy; {{ date('Y') }} Nezerwa Plus. All rights reserved.
                 </div>
             </div>
         </div>
@@ -69,7 +69,7 @@
                 {{ $slot }}
             </div>
         </div>
-        
+
     </div>
 </body>
 </html>
