@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <title>{{ config('app.name', 'KingWine') }}</title>
+    <title>{{ config('app.name', 'NezerwaPlus') }}</title>
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -58,7 +58,7 @@
                 </div>
 
                 <div class="text-indigo-300 text-xs">
-                    &copy; {{ date('Y') }} Nezerwa Plus. All rights reserved.
+                    &copy; {{ date('Y') }} NezerwaPlus. All rights reserved.
                 </div>
             </div>
         </div>

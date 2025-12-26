@@ -12,6 +12,9 @@ class DatabaseSeeder extends Seeder
             PermissionSeeder::class,
             RoleSeeder::class,
             AdminUserSeeder::class,
+            //ProductImportSeeder::class,
+            // OpeningBalancesSeeder::class, // Run manually or uncomment to seed opening balances
+            // UserSeeder::class, // Disabled per user request
         ]);
     }
 }
