@@ -23,8 +23,8 @@
     <div class="min-h-full flex">
 
         <!-- Left Side: Branding & Visuals -->
-        <div class="hidden lg:flex flex-1 relative bg-indigo-900 text-white overflow-hidden">
-            <div class="absolute inset-0 bg-gradient-to-br from-indigo-600 to-indigo-900 opacity-90"></div>
+        <div class="hidden lg:flex flex-1 relative bg-emerald-900 text-white overflow-hidden">
+            <div class="absolute inset-0 bg-gradient-to-br from-emerald-600 to-emerald-900 opacity-90"></div>
             <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop"
                  alt="Background" class="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-20">
 
@@ -42,22 +42,22 @@
                 </div>
 
                 <div class="space-y-6">
-                    <blockquote class="text-2xl font-medium leading-relaxed text-indigo-100">
+                    <blockquote class="text-2xl font-medium leading-relaxed text-emerald-100">
                         "Manage your stock, track sales, and grow your business with confidence. The premium solution for modern commerce."
                     </blockquote>
                     <div class="flex items-center gap-4">
                         <div class="flex -space-x-2">
-                            <img class="inline-block h-10 w-10 rounded-full ring-2 ring-indigo-900" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=64&h=64" alt=""/>
-                            <img class="inline-block h-10 w-10 rounded-full ring-2 ring-indigo-900" src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=64&h=64" alt=""/>
-                            <img class="inline-block h-10 w-10 rounded-full ring-2 ring-indigo-900" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=64&h=64" alt=""/>
+                            <img class="inline-block h-10 w-10 rounded-full ring-2 ring-emerald-900" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=64&h=64" alt=""/>
+                            <img class="inline-block h-10 w-10 rounded-full ring-2 ring-emerald-900" src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=64&h=64" alt=""/>
+                            <img class="inline-block h-10 w-10 rounded-full ring-2 ring-emerald-900" src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=64&h=64" alt=""/>
                         </div>
-                        <div class="text-indigo-200 text-sm font-medium">
+                        <div class="text-emerald-200 text-sm font-medium">
                             Trusted by 500+ businesses
                         </div>
                     </div>
                 </div>
 
-                <div class="text-indigo-300 text-xs">
+                <div class="text-emerald-300 text-xs">
                     &copy; {{ date('Y') }} NezerwaPlus. All rights reserved.
                 </div>
             </div>
