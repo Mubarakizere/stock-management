@@ -22,7 +22,7 @@
             <div class="mt-1">
                 <input id="email" name="email" type="email" autocomplete="email" required autofocus
                        value="{{ old('email') }}"
-                       class="block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2.5">
+                       class="block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white shadow-sm focus:border-emerald-500 focus:ring-emerald-500 sm:text-sm py-2.5">
             </div>
             <x-input-error :messages="$errors->get('email')" class="mt-2" />
         </div>
@@ -34,14 +34,14 @@
                     Password
                 </label>
                 @if (Route::has('password.request'))
-                    <a href="{{ route('password.request') }}" class="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
+                    <a href="{{ route('password.request') }}" class="text-sm font-medium text-emerald-600 hover:text-emerald-500 dark:text-emerald-400">
                         Forgot password?
                     </a>
                 @endif
             </div>
             <div class="mt-1 relative">
                 <input id="password" name="password" type="password" autocomplete="current-password" required
-                       class="block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2.5">
+                       class="block w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white shadow-sm focus:border-emerald-500 focus:ring-emerald-500 sm:text-sm py-2.5">
             </div>
             <x-input-error :messages="$errors->get('password')" class="mt-2" />
         </div>
@@ -49,7 +49,7 @@
         <!-- Remember Me -->
         <div class="flex items-center">
             <input id="remember_me" name="remember" type="checkbox"
-                   class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-800">
+                   class="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 dark:border-gray-600 dark:bg-gray-800">
             <label for="remember_me" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">
                 Remember me for 30 days
             </label>
@@ -57,7 +57,7 @@
 
         <div>
             <button type="submit"
-                    class="flex w-full justify-center rounded-lg border border-transparent bg-indigo-600 py-2.5 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors">
+                    class="flex w-full justify-center rounded-lg border border-transparent bg-emerald-600 py-2.5 px-4 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-colors">
                 Sign in
             </button>
         </div>
