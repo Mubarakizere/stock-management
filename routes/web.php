@@ -322,9 +322,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
     */
     Route::middleware('permission:loans.view')->group(function () {
 
-        // Core resource
-        Route::resource('loans', LoanController::class)
-            ->whereNumber('loan');
+        // Exports MUST come first (before resource routes)
+        Route::get('loans/export/csv', [LoanController::class, 'exportCsv'])
+            ->name('loans.export.csv');
+
+        Route::get('loans/export/pdf', [LoanController::class, 'exportPdf'])
+            ->name('loans.export.pdf');
+
+        // Aggregates for dashboards (JSON or HTML)
+        Route::get('loans/insights', [LoanController::class, 'insights'])
+            ->name('loans.insights');
+
+        // Due-date calendar feed (JSON; later can add ICS)
+        Route::get('loans/calendar-feed', [LoanController::class, 'calendarFeed'])
+            ->name('loans.calendar.feed');
 
         // Time-window views (cards/table/summary); ?from=YYYY-MM-DD&to=YYYY-MM-DD for custom
         Route::get('loans/range/{range}', [LoanController::class, 'range'])
@@ -337,14 +348,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->whereNumber('id')
             ->name('loans.party');
 
-        // Aggregates for dashboards (JSON or HTML)
-        Route::get('loans/insights', [LoanController::class, 'insights'])
-            ->name('loans.insights');
-
-        // Due-date calendar feed (JSON; later can add ICS)
-        Route::get('loans/calendar-feed', [LoanController::class, 'calendarFeed'])
-            ->name('loans.calendar.feed');
-
         // Actions
         Route::post('loans/{loan}/mark-paid', [LoanController::class, 'markPaid'])
             ->whereNumber('loan')
@@ -354,14 +357,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->whereNumber('loan')
             ->name('loans.recalculate');
 
-        // Exports
-        Route::get('loans/export/csv', [LoanController::class, 'exportCsv'])
-            ->name('loans.export.csv');
-
-        // Keep your PDF export (still under loans.view; if you want admin-only,
-        // we can add a custom permission later like loans.export)
-        Route::get('loans/export/pdf', [LoanController::class, 'exportPdf'])
-            ->name('loans.export.pdf');
+        // Core resource (MUST come last to avoid conflicts)
+        Route::resource('loans', LoanController::class)
+            ->whereNumber('loan');
     });
 
     /*
