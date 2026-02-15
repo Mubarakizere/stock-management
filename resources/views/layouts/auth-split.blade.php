@@ -20,6 +20,7 @@
     </style>
 </head>
 <body class="h-full">
+    <x-loader />
     <div class="min-h-full flex">
 
         <!-- Left Side: Branding & Visuals -->

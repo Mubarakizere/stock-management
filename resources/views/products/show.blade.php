@@ -68,9 +68,16 @@
                     <i data-lucide="edit-3" class="w-4 h-4"></i>
                     Edit
                 </a>
-                <a href="{{ route('products.adjust.create', $product) }}" class="btn btn-warning text-sm flex items-center gap-1">
+                <button
+                    type="button"
+                    class="btn btn-warning text-sm flex items-center gap-1"
+                    @click="$store.quickAdjust.open({{ $product->id }}, '{{ addslashes($product->name) }}', {{ $current }})">
+                    <i data-lucide="plus-minus" class="w-4 h-4"></i>
+                    ± Quick Adjust
+                </button>
+                <a href="{{ route('products.adjust.create', $product) }}" class="btn btn-outline text-sm flex items-center gap-1">
                     <i data-lucide="sliders" class="w-4 h-4"></i>
-                    Adjust Stock
+                    Full Adjust
                 </a>
             @endcan
 
@@ -239,11 +246,169 @@
     @endcannot
 </div>
 
+{{-- Quick Adjust Modal --}}
+@can('products.edit')
+<div
+    x-data
+    x-show="$store.quickAdjust.show"
+    x-cloak
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+    @keydown.escape.window="$store.quickAdjust.close()"
+>
+    <div
+        @click.outside="$store.quickAdjust.close()"
+        class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl p-6 w-full max-w-md mx-4"
+    >
+        <div class="flex items-center gap-2 mb-4">
+            <i data-lucide="package" class="w-5 h-5 text-indigo-600 dark:text-indigo-400"></i>
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Quick Stock Adjustment</h2>
+        </div>
+
+        <p class="text-sm text-gray-600 dark:text-gray-300 mb-1">
+            Product: <span class="font-semibold text-gray-900 dark:text-gray-100" x-text="$store.quickAdjust.productName"></span>
+        </p>
+        <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">
+            Current stock: <span class="font-semibold" x-text="$store.quickAdjust.currentStock"></span>
+        </p>
+
+        <div class="flex gap-2 mb-4">
+            <button type="button" class="flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-1.5"
+                :class="$store.quickAdjust.type === 'add' ? 'bg-emerald-600 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'"
+                @click="$store.quickAdjust.type = 'add'">
+                <i data-lucide="plus-circle" class="w-4 h-4"></i> Add
+            </button>
+            <button type="button" class="flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-1.5"
+                :class="$store.quickAdjust.type === 'remove' ? 'bg-rose-600 text-white shadow-md' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'"
+                @click="$store.quickAdjust.type = 'remove'">
+                <i data-lucide="minus-circle" class="w-4 h-4"></i> Remove
+            </button>
+        </div>
+
+        <div class="mb-4">
+            <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">Quantity</label>
+            <input type="number" step="1" min="1" class="form-input w-full"
+                x-model.number="$store.quickAdjust.quantity" placeholder="e.g. 10"
+                @keydown.enter.prevent="$store.quickAdjust.submit()">
+        </div>
+
+        <div class="mb-4 p-3 rounded-lg text-sm font-medium"
+            :class="$store.quickAdjust.type === 'add' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300' : 'bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300'">
+            <span x-text="$store.quickAdjust.currentStock"></span>
+            <span x-text="$store.quickAdjust.type === 'add' ? ' + ' : ' − '"></span>
+            <span x-text="$store.quickAdjust.quantity || 0"></span>
+            <span> = </span>
+            <span class="font-bold" x-text="$store.quickAdjust.type === 'add' ? ($store.quickAdjust.currentStock + ($store.quickAdjust.quantity || 0)) : Math.max(0, $store.quickAdjust.currentStock - ($store.quickAdjust.quantity || 0))"></span>
+        </div>
+
+        <div class="mb-5">
+            <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">Reason (optional)</label>
+            <textarea class="form-input w-full text-sm" rows="2" x-model="$store.quickAdjust.notes" placeholder="e.g. Physical count, damaged goods…"></textarea>
+        </div>
+
+        <template x-if="$store.quickAdjust.error">
+            <div class="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm">
+                <span x-text="$store.quickAdjust.error"></span>
+            </div>
+        </template>
+
+        <div class="flex justify-end gap-3">
+            <button type="button" class="btn btn-outline text-sm" @click="$store.quickAdjust.close()">Cancel</button>
+            <button type="button" class="btn text-sm text-white"
+                :class="$store.quickAdjust.type === 'add' ? 'btn-success' : 'btn-danger'"
+                :disabled="$store.quickAdjust.loading || !$store.quickAdjust.quantity || $store.quickAdjust.quantity <= 0"
+                @click="$store.quickAdjust.submit()">
+                <span x-show="!$store.quickAdjust.loading" class="flex items-center gap-1"><i data-lucide="check" class="w-4 h-4"></i> Apply</span>
+                <span x-show="$store.quickAdjust.loading">Saving…</span>
+            </button>
+        </div>
+    </div>
+</div>
+@endcan
+
+{{-- Toast Notification --}}
+<div
+    x-data="{ toasts: [] }"
+    x-on:quick-adjust-toast.window="toasts.push({ id: Date.now(), message: $event.detail.message, success: $event.detail.success }); setTimeout(() => toasts.shift(), 4000);"
+    class="fixed bottom-6 right-6 z-[60] flex flex-col gap-2">
+    <template x-for="toast in toasts" :key="toast.id">
+        <div x-transition class="px-4 py-3 rounded-lg shadow-lg text-sm font-medium flex items-center gap-2 min-w-[280px]"
+            :class="toast.success ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'">
+            <span x-text="toast.message"></span>
+        </div>
+    </template>
+</div>
+
 @push('scripts')
 <script src="https://unpkg.com/lucide@latest"></script>
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         if (window.lucide) lucide.createIcons();
+    });
+
+    document.addEventListener('alpine:init', () => {
+        Alpine.store('quickAdjust', {
+            show: false,
+            productId: null,
+            productName: '',
+            currentStock: 0,
+            type: 'add',
+            quantity: null,
+            notes: '',
+            error: '',
+            loading: false,
+
+            open(id, name, stock) {
+                this.productId = id;
+                this.productName = name;
+                this.currentStock = stock;
+                this.type = 'add';
+                this.quantity = null;
+                this.notes = '';
+                this.error = '';
+                this.loading = false;
+                this.show = true;
+            },
+
+            close() { this.show = false; },
+
+            async submit() {
+                if (!this.quantity || this.quantity <= 0) return;
+                this.loading = true;
+                this.error = '';
+
+                try {
+                    const resp = await fetch(`/products/${this.productId}/quick-adjust`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                            'Accept': 'application/json',
+                        },
+                        body: JSON.stringify({ type: this.type, quantity: this.quantity, notes: this.notes || null }),
+                    });
+
+                    const data = await resp.json();
+
+                    if (!resp.ok || !data.success) {
+                        this.error = data.message || 'Something went wrong.';
+                        this.loading = false;
+                        return;
+                    }
+
+                    window.dispatchEvent(new CustomEvent('quick-adjust-toast', {
+                        detail: { message: `✓ ${data.message}`, success: true }
+                    }));
+
+                    this.close();
+                    // Reload to reflect updated stats on the show page
+                    setTimeout(() => location.reload(), 800);
+
+                } catch (e) {
+                    this.error = 'Network error. Please try again.';
+                    this.loading = false;
+                }
+            },
+        });
     });
 </script>
 @endpush

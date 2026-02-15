@@ -83,4 +83,79 @@ class StockAdjustmentController extends Controller
             return back()->withErrors(['error' => 'Adjustment failed: ' . $e->getMessage()]);
         }
     }
+
+    /**
+     * Quick inline adjustment via AJAX (from product list / detail page).
+     */
+    public function quickAdjust(Request $request, Product $product)
+    {
+        $request->validate([
+            'type'     => 'required|in:add,remove',
+            'quantity' => 'required|numeric|min:0.01',
+            'notes'    => 'nullable|string|max:500',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $product = Product::where('id', $product->id)->lockForUpdate()->first();
+
+            $currentStock = $product->currentStock();
+            $qty          = (float) $request->input('quantity');
+            $type         = $request->input('type');
+
+            // Prevent removing more than available
+            if ($type === 'remove' && $qty > $currentStock) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Cannot remove {$qty} units. Only {$currentStock} in stock.",
+                ], 422);
+            }
+
+            $movementType = $type === 'add' ? 'in' : 'out';
+            $difference   = $type === 'add' ? $qty : -$qty;
+            $notes        = $request->input('notes') ?? ($type === 'add' ? 'Quick stock addition' : 'Quick stock removal');
+
+            // 1. Create StockAdjustment record
+            $adjustment = \App\Models\StockAdjustment::create([
+                'user_id'    => Auth::id(),
+                'product_id' => $product->id,
+                'quantity'   => $difference,
+                'notes'      => $notes,
+            ]);
+
+            // 2. Create StockMovement
+            $unitCost = $product->weightedAverageCost();
+            StockMovement::create([
+                'product_id'  => $product->id,
+                'type'        => $movementType,
+                'quantity'    => $qty,
+                'unit_cost'   => $unitCost,
+                'total_cost'  => round($qty * $unitCost, 2),
+                'source_type' => \App\Models\StockAdjustment::class,
+                'source_id'   => $adjustment->id,
+                'user_id'     => Auth::id(),
+                'notes'       => $notes,
+            ]);
+
+            DB::commit();
+
+            $newStock = $product->currentStock();
+
+            return response()->json([
+                'success'   => true,
+                'message'   => "{$product->name}: {$currentStock} → {$newStock}",
+                'old_stock' => $currentStock,
+                'new_stock' => $newStock,
+            ]);
+
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('Quick stock adjustment failed', ['error' => $e->getMessage()]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Adjustment failed: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
 }

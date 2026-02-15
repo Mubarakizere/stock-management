@@ -37,7 +37,7 @@
                 $dot   = $cat->color ?? '#6b7280';
             @endphp
 
-            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition">
+            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition" data-product-id="{{ $p->id }}">
                 {{-- Name --}}
                 <td class="px-4 py-3 text-gray-900 dark:text-gray-100 font-medium">
                     @can('products.view')
@@ -123,7 +123,7 @@
                     {{ $zero ? 'text-rose-600 dark:text-rose-400'
                              : ($low ? 'text-amber-700 dark:text-amber-400'
                                      : 'text-gray-900 dark:text-gray-100') }}">
-                    {{ number_format($stk) }}
+                    <span data-stock>{{ number_format($stk) }}</span>
                     @if($zero)
                         <span class="ml-2 px-2 py-0.5 text-[11px] rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300">
                             Out
@@ -156,6 +156,16 @@
                             <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
                             Edit
                         </a>
+                    @endcan
+
+                    @can('products.edit')
+                        <button
+                            type="button"
+                            class="btn btn-warning text-xs inline-flex items-center gap-1 px-2.5 py-1.5"
+                            @click="$store.quickAdjust.open({{ $p->id }}, '{{ addslashes($p->name) }}', {{ $stk }})">
+                            <i data-lucide="plus-minus" class="w-3.5 h-3.5"></i>
+                            ± Stock
+                        </button>
                     @endcan
 
                     @can('stock.view')

@@ -122,13 +122,13 @@
             </div>
 
             <div id="kpi-section" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 opacity-0 transition-opacity duration-500">
-                <x-stat label="Total Sales" :value="$totalSales" color="text-indigo-600" icon="dollar-sign" />
-                <x-stat label="Total Profit" :value="$totalProfit" color="text-green-600" icon="trending-up" />
-                <x-stat label="Pending Balances" :value="$pendingBalances" color="text-red-600" icon="alert-circle" />
-                <x-stat label="Total Purchases" :value="$totalPurchases" color="text-pink-600" icon="shopping-bag" />
-                <x-stat label="Total Expenses" :value="$totalExpenses" color="text-amber-600" icon="wallet" />
+                <x-stat label="Total Sales" :value="$totalSales" color="text-indigo-600" icon="dollar-sign" formula="SUM of all sales total_amount" />
+                <x-stat label="Total Profit" :value="$totalProfit" color="text-green-600" icon="trending-up" formula="SUM(unit_price − cost_price) × qty" />
+                <x-stat label="Pending Balances" :value="$pendingBalances" color="text-red-600" icon="alert-circle" formula="SUM(total − paid) where pending" />
+                <x-stat label="Total Purchases" :value="$totalPurchases" color="text-pink-600" icon="shopping-bag" formula="SUM of all purchases total_amount" />
+                <x-stat label="Total Expenses" :value="$totalExpenses" color="text-amber-600" icon="wallet" formula="SUM of all expense amounts" />
                 @if($sections['finance'] ?? false)
-                    <x-stat label="Net Balance" :value="$netBalance" :color="$netBalance >= 0 ? 'text-green-600' : 'text-red-600'" icon="scale" />
+                    <x-stat label="Net Balance" :value="$netBalance" :color="$netBalance >= 0 ? 'text-green-600' : 'text-red-600'" icon="scale" formula="Total Credits − Total Debits" />
                 @endif
             </div>
 
@@ -146,6 +146,7 @@
                         <i data-lucide="{{ $salesChange >= 0 ? 'trending-up' : 'trending-down' }}" class="w-3 h-3 mr-1"></i>
                         {{ $salesChange >= 0 ? '+' : '' }}{{ number_format($salesChange, 1) }}% vs yesterday
                     </span>
+                    <p class="mt-1 text-[0.6rem] text-gray-400 italic">📐 Sales where date = today</p>
                 </div>
 
                 <div class="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg shadow-sm p-4 hover:shadow-md transition-shadow">
@@ -157,6 +158,7 @@
                         RWF {{ number_format($weekSales, 0) }}
                     </p>
                     <span class="text-xs text-gray-500 dark:text-gray-400 mt-1 block">Last 7 days</span>
+                    <p class="mt-1 text-[0.6rem] text-gray-400 italic">📐 Sales from start of week</p>
                 </div>
 
                 <div class="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg shadow-sm p-4 hover:shadow-md transition-shadow">
@@ -168,6 +170,7 @@
                         RWF {{ number_format($monthSales, 0) }}
                     </p>
                     <span class="text-xs text-gray-500 dark:text-gray-400 mt-1 block">{{ now()->format('F Y') }}</span>
+                    <p class="mt-1 text-[0.6rem] text-gray-400 italic">📐 Sales from 1st of month</p>
                 </div>
 
                 <div class="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg shadow-sm p-4 hover:shadow-md transition-shadow">
@@ -184,6 +187,7 @@
                     <span class="text-xs text-gray-500 dark:text-gray-400 mt-1 block">
                         {{ number_format($profitMargin, 1) }}% profit margin
                     </span>
+                    <p class="mt-1 text-[0.6rem] text-gray-400 italic">📐 (Sales − Expenses) ÷ Sales × 100</p>
                 </div>
             </div>
         </section>
@@ -241,10 +245,10 @@
             </h3>
 
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <x-stat label="Total Expenses" :value="$totalExpenses" color="text-rose-600" icon="coins" />
-                <x-stat label="Today" :value="$todayExpenses" color="text-rose-600" icon="calendar" />
-                <x-stat label="This Week" :value="$weekExpenses" color="text-rose-600" icon="calendar-range" />
-                <x-stat label="This Month" :value="$monthExpenses" color="text-rose-600" icon="calendar-days" />
+                <x-stat label="Total Expenses" :value="$totalExpenses" color="text-rose-600" icon="coins" formula="SUM of all expense amounts" />
+                <x-stat label="Today" :value="$todayExpenses" color="text-rose-600" icon="calendar" formula="Expenses where date = today" />
+                <x-stat label="This Week" :value="$weekExpenses" color="text-rose-600" icon="calendar-range" formula="Expenses from start of week" />
+                <x-stat label="This Month" :value="$monthExpenses" color="text-rose-600" icon="calendar-days" formula="Expenses from start of month" />
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">

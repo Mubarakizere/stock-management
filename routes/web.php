@@ -74,6 +74,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('dashboard.sales.chart')
         ->middleware('permission:reports.view');
 
+    Route::get('/dashboard/cashflow-chart', [DashboardController::class, 'cashflowChartData'])
+        ->name('dashboard.cashflow.chart')
+        ->middleware('permission:reports.view');
+
     /*
     |--------------------------------------------------------------------------
     | Users & Roles Management
@@ -190,6 +194,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('products/{product}/adjust', [App\Http\Controllers\StockAdjustmentController::class, 'store'])
         ->name('products.adjust.store')
         ->middleware('permission:products.view');
+    Route::post('products/{product}/quick-adjust', [App\Http\Controllers\StockAdjustmentController::class, 'quickAdjust'])
+        ->name('products.quick-adjust')
+        ->middleware('permission:products.edit');
 
     // Suppliers
     Route::resource('suppliers', SupplierController::class)

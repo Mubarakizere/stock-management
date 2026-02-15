@@ -181,17 +181,27 @@ class DashboardController extends Controller
     private function getSalesChartData(int $days = 30): array
     {
         try {
-            $data = Sale::select(
+            $start = now()->subDays($days)->startOfDay();
+            $end   = now()->endOfDay();
+
+            // Get actual sales grouped by date
+            $raw = Sale::select(
                         DB::raw('DATE(created_at) as d'),
                         DB::raw('SUM(total_amount) as s')
                     )
-                    ->where('created_at', '>=', now()->subDays($days))
+                    ->where('created_at', '>=', $start)
                     ->groupBy(DB::raw('DATE(created_at)'))
                     ->orderBy('d')
-                    ->get();
+                    ->pluck('s', 'd');
 
-            $labels = $data->pluck('d')->map(fn($d) => Carbon::parse($d)->format('M d'));
-            $sales = $data->pluck('s');
+            // Generate ALL days (zero-fill missing ones)
+            $labels = collect();
+            $sales  = collect();
+            for ($d = $start->copy(); $d <= $end; $d->addDay()) {
+                $key = $d->toDateString();
+                $labels->push(Carbon::parse($key)->format('M d'));
+                $sales->push((float) ($raw[$key] ?? 0));
+            }
 
             return [$labels, $sales];
         } catch (\Exception $e) {
@@ -206,32 +216,36 @@ class DashboardController extends Controller
     private function getTrendData(int $months = 6): array
     {
         try {
-            $monthLabels = collect(range(1, $months))
-                ->map(fn($i) => now()->subMonths($months - $i)->format('M'));
-
             $startDate = now()->subMonths($months)->startOfMonth();
 
-            $salesData = Sale::selectRaw("DATE_TRUNC('month', created_at) as m, SUM(total_amount) as t")
+            // Generate month labels and keys
+            $monthLabels = collect();
+            $monthKeys   = collect();
+            for ($i = 1; $i <= $months; $i++) {
+                $d = now()->subMonths($months - $i);
+                $monthLabels->push($d->format('M'));
+                $monthKeys->push($d->format('Y-m'));
+            }
+
+            // Get aggregated sales by month
+            $salesRaw = Sale::selectRaw("to_char(created_at, 'YYYY-MM') as m, SUM(total_amount) as t")
                             ->where('created_at', '>=', $startDate)
                             ->groupBy('m')
                             ->orderBy('m')
-                            ->pluck('t');
+                            ->pluck('t', 'm');
 
-            $purchaseData = Purchase::selectRaw("DATE_TRUNC('month', created_at) as m, SUM(total_amount) as t")
+            // Get aggregated purchases by month
+            $purchaseRaw = Purchase::selectRaw("to_char(created_at, 'YYYY-MM') as m, SUM(total_amount) as t")
                                    ->where('created_at', '>=', $startDate)
                                    ->groupBy('m')
                                    ->orderBy('m')
-                                   ->pluck('t');
+                                   ->pluck('t', 'm');
 
-            // Pad with zeros if needed
-            while ($salesData->count() < $months) {
-                $salesData->push(0);
-            }
-            while ($purchaseData->count() < $months) {
-                $purchaseData->push(0);
-            }
+            // Map to correct positions using month keys
+            $salesTrend    = $monthKeys->map(fn($k) => (float) ($salesRaw[$k] ?? 0));
+            $purchaseTrend = $monthKeys->map(fn($k) => (float) ($purchaseRaw[$k] ?? 0));
 
-            return [$monthLabels, $salesData, $purchaseData];
+            return [$monthLabels, $salesTrend, $purchaseTrend];
         } catch (\Exception $e) {
             Log::warning('Trend data failed: ' . $e->getMessage());
             $empty = collect(array_fill(0, $months, 0));

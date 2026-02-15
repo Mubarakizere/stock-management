@@ -1,4 +1,4 @@
-@props(['label' => 'Label', 'value' => 0, 'color' => null, 'icon' => null])
+@props(['label' => 'Label', 'value' => 0, 'color' => null, 'icon' => null, 'formula' => null])
 
 @php
     $iconMap = [
@@ -58,6 +58,13 @@
         </span>
         <span class="text-xs sm:text-sm text-gray-400 dark:text-gray-500 mb-0.5">RWF</span>
     </div>
+
+    {{-- Formula --}}
+    @if($formula)
+        <p class="mt-1.5 text-[0.65rem] text-gray-400 dark:text-gray-500 leading-tight italic truncate" title="{{ $formula }}">
+            📐 {{ $formula }}
+        </p>
+    @endif
 </div>
 
 {{-- Count-up Animation --}}
