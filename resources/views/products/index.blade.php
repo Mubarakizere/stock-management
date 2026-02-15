@@ -359,54 +359,80 @@
                             </td>
 
                             {{-- Actions --}}
-                            <td class="px-4 py-3 text-right whitespace-nowrap space-x-1.5">
-                                @can('products.view')
-                                    <a href="{{ route('products.show', $p) }}"
-                                       class="btn btn-secondary text-xs inline-flex items-center gap-1 px-2.5 py-1.5">
-                                        <i data-lucide="eye" class="w-3.5 h-3.5"></i>
-                                        View
-                                    </a>
-                                @endcan
-
-                                @can('products.edit')
-                                    <a href="{{ route('products.edit', $p) }}"
-                                       class="btn btn-outline text-xs inline-flex items-center gap-1 px-2.5 py-1.5">
-                                        <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
-                                        Edit
-                                    </a>
-                                @endcan
-
-                                @can('products.edit')
-                                    <button
-                                        type="button"
-                                        class="btn btn-warning text-xs inline-flex items-center gap-1 px-2.5 py-1.5"
-                                        @click="$store.quickAdjust.open({{ $p->id }}, '{{ addslashes($p->name) }}', {{ $stk }})">
-                                        <i data-lucide="plus-minus" class="w-3.5 h-3.5"></i>
-                                        ± Stock
+                            <td class="px-4 py-3 text-right whitespace-nowrap">
+                                <div x-data="{ open: false }" class="relative inline-block text-left">
+                                    <button 
+                                        @click="open = !open" 
+                                        @click.outside="open = false"
+                                        class="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition"
+                                    >
+                                        <i data-lucide="more-vertical" class="w-4 h-4"></i>
                                     </button>
-                                @endcan
 
-                                @can('stock.view')
-                                    <a href="{{ route('stock.history', ['product_id' => $p->id]) }}"
-                                       class="btn btn-outline text-xs inline-flex items-center gap-1 px-2.5 py-1.5">
-                                        <i data-lucide="history" class="w-3.5 h-3.5"></i>
-                                        Moves
-                                    </a>
-                                @endcan
+                                    <div 
+                                        x-show="open" 
+                                        x-cloak
+                                        x-transition:enter="transition ease-out duration-100"
+                                        x-transition:enter-start="opacity-0 scale-95"
+                                        x-transition:enter-end="opacity-100 scale-100"
+                                        x-transition:leave="transition ease-in duration-75"
+                                        x-transition:leave-start="opacity-100 scale-100"
+                                        x-transition:leave-end="opacity-0 scale-95"
+                                        class="absolute right-0 z-50 mt-2 w-48 origin-top-right rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none divide-y divide-gray-100 dark:divide-gray-700"
+                                    >
+                                        <div class="py-1">
+                                            @can('products.view')
+                                                <a href="{{ route('products.show', $p) }}" class="group flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                                    <i data-lucide="eye" class="mr-3 h-4 w-4 text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400"></i>
+                                                    View Details
+                                                </a>
+                                            @endcan
 
-                                @can('products.delete')
-                                    <form action="{{ route('products.destroy', $p) }}" method="POST" class="inline">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button
-                                            type="button"
-                                            class="btn btn-danger text-xs inline-flex items-center gap-1 px-2.5 py-1.5"
-                                            @click="$store.confirm.openWith($el.closest('form'))">
-                                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                                            Delete
-                                        </button>
-                                    </form>
-                                @endcan
+                                            @can('products.edit')
+                                                <a href="{{ route('products.edit', $p) }}" class="group flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                                    <i data-lucide="edit-3" class="mr-3 h-4 w-4 text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400"></i>
+                                                    Edit Product
+                                                </a>
+                                            @endcan
+                                        </div>
+
+                                        <div class="py-1">
+                                            @can('products.edit')
+                                                <button 
+                                                    @click="open = false; $store.quickAdjust.open({{ $p->id }}, '{{ addslashes($p->name) }}', {{ $stk }})"
+                                                    class="group flex w-full items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                                >
+                                                    <i data-lucide="plus-minus" class="mr-3 h-4 w-4 text-gray-400 group-hover:text-amber-600 dark:group-hover:text-amber-400"></i>
+                                                    Adjust Stock
+                                                </button>
+                                            @endcan
+
+                                            @can('stock.view')
+                                                <a href="{{ route('stock.history', ['product_id' => $p->id]) }}" class="group flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                                    <i data-lucide="history" class="mr-3 h-4 w-4 text-gray-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400"></i>
+                                                    Stock History
+                                                </a>
+                                            @endcan
+                                        </div>
+
+                                        @can('products.delete')
+                                            <div class="py-1">
+                                                <form action="{{ route('products.destroy', $p) }}" method="POST">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button 
+                                                        type="button"
+                                                        @click="open = false; $store.confirm.openWith($el.closest('form'))"
+                                                        class="group flex w-full items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-rose-50 dark:hover:bg-rose-900/20"
+                                                    >
+                                                        <i data-lucide="trash-2" class="mr-3 h-4 w-4 text-gray-400 group-hover:text-rose-600 dark:group-hover:text-rose-400"></i>
+                                                        <span class="group-hover:text-rose-600 dark:group-hover:text-rose-400">Delete Product</span>
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        @endcan
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                     @empty
