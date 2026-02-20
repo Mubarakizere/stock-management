@@ -81,6 +81,7 @@
                             <option value="both">Both</option>
                             <option value="product">Product</option>
                             <option value="expense">Expense</option>
+                            <option value="raw_material">Raw Material</option>
                         </select>
                         @error('kind')
                             <p class="text-red-600 text-sm mt-1">{{ $message }}</p>

@@ -11,7 +11,8 @@ use App\Models\{
     Loan,
     Transaction,
     DebitCredit,
-    PaymentChannel
+    PaymentChannel,
+    Category
 };
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{DB, Auth, Log};
@@ -108,9 +109,12 @@ class PurchaseController extends Controller
     {
         $suppliers = Supplier::orderBy('name')->get();
         $products  = Product::orderBy('name')->get(['id', 'name', 'cost_price']);
+        $categories = Category::active()->forProducts()->ordered()
+            ->with(['products' => fn($q) => $q->orderBy('name')])
+            ->get();
         $paymentChannels = PaymentChannel::where('is_active', true)->get();
 
-        return view('purchases.create', compact('suppliers', 'products', 'paymentChannels'));
+        return view('purchases.create', compact('suppliers', 'products', 'categories', 'paymentChannels'));
     }
 
     public function store(Request $request)
@@ -260,9 +264,12 @@ class PurchaseController extends Controller
     {
         $suppliers = Supplier::orderBy('name')->get();
         $products  = Product::orderBy('name')->get(['id', 'name', 'cost_price']);
+        $categories = Category::active()->forProducts()->ordered()
+            ->with(['products' => fn($q) => $q->orderBy('name')])
+            ->get();
         $purchase->load('items');
         $paymentChannels = PaymentChannel::where('is_active', true)->get();
-        return view('purchases.edit', compact('purchase', 'suppliers', 'products', 'paymentChannels'));
+        return view('purchases.edit', compact('purchase', 'suppliers', 'products', 'categories', 'paymentChannels'));
     }
 
     public function update(Request $request, Purchase $purchase)

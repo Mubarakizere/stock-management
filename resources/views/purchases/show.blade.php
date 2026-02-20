@@ -8,7 +8,7 @@
     // Ensure relations exist (safe if already eager-loaded)
     try {
         $purchase->loadMissing([
-            'items.product',
+            'items.product.category',
             'items.returnItems',
             'returns.items.product',
             'supplier',
@@ -396,6 +396,11 @@
                         <tr class="text-sm">
                             <td class="px-5 py-3 text-gray-900 dark:text-gray-100">
                                 {{ optional($item->product)->name ?? ('#'.$item->product_id) }}
+                                @if(optional($item->product)->category)
+                                    <span class="ml-1 text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                                        {{ $item->product->category->name }}
+                                    </span>
+                                @endif
                             </td>
                             <td class="px-5 py-3 text-gray-700 dark:text-gray-300">
                                 {{ $fmt($qty) }}

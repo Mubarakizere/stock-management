@@ -51,7 +51,7 @@ class CategoryController extends Controller
     // Kind / active filters (skip when viewing trash except `inactive` which doesn’t apply)
     if ($filterKind === 'inactive') {
         $query->where('is_active', false);
-    } elseif (in_array($filterKind, ['product','expense','both'], true)) {
+    } elseif (in_array($filterKind, ['product','expense','both','raw_material'], true)) {
         $query->where('kind', $filterKind)->where('is_active', true);
     }
 

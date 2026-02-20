@@ -48,7 +48,7 @@ class CategoryStoreRequest extends FormRequest
                 ),
         ],
         'description' => ['nullable','string'],
-        'kind'        => ['required','in:product,expense,both'],
+        'kind'        => ['required','in:product,expense,both,raw_material'],
         'parent_id'   => ['nullable','integer','exists:categories,id'],
         'code'        => ['nullable','string','max:40'],
         'color'       => ['nullable','string','max:20'],

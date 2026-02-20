@@ -145,11 +145,39 @@
                                         @change="onProductChange(row, $event)"
                                         class="form-select">
                                     <option value="">Select product</option>
-                                    @foreach ($products as $p)
-                                        <option value="{{ $p->id }}" data-cost="{{ $p->cost_price ?? 0 }}">
-                                            {{ $p->name }}
-                                        </option>
-                                    @endforeach
+                                    @if(isset($categories) && $categories->count())
+                                        @foreach ($categories as $cat)
+                                            @if($cat->products->count())
+                                                <optgroup label="{{ $cat->name }} ({{ ucfirst(str_replace('_', ' ', $cat->kind)) }})">
+                                                    @foreach ($cat->products as $p)
+                                                        <option value="{{ $p->id }}" data-cost="{{ $p->cost_price ?? 0 }}">
+                                                            {{ $p->name }}
+                                                        </option>
+                                                    @endforeach
+                                                </optgroup>
+                                            @endif
+                                        @endforeach
+                                        {{-- Uncategorized products --}}
+                                        @php
+                                            $categorizedIds = $categories->flatMap->products->pluck('id')->toArray();
+                                            $uncategorized = $products->whereNotIn('id', $categorizedIds);
+                                        @endphp
+                                        @if($uncategorized->count())
+                                            <optgroup label="Uncategorized">
+                                                @foreach ($uncategorized as $p)
+                                                    <option value="{{ $p->id }}" data-cost="{{ $p->cost_price ?? 0 }}">
+                                                        {{ $p->name }}
+                                                    </option>
+                                                @endforeach
+                                            </optgroup>
+                                        @endif
+                                    @else
+                                        @foreach ($products as $p)
+                                            <option value="{{ $p->id }}" data-cost="{{ $p->cost_price ?? 0 }}">
+                                                {{ $p->name }}
+                                            </option>
+                                        @endforeach
+                                    @endif
                                 </select>
                             </td>
 

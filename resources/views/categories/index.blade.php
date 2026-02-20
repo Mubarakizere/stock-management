@@ -6,12 +6,13 @@
 @php
     // Tabs
     $kinds = [
-        'all'      => 'All',
-        'product'  => 'Product',
-        'expense'  => 'Expense',
-        'both'     => 'Both',
-        'inactive' => 'Inactive',
-        'trash'    => 'Trash',
+        'all'          => 'All',
+        'product'      => 'Product',
+        'expense'      => 'Expense',
+        'raw_material' => 'Raw Material',
+        'both'         => 'Both',
+        'inactive'     => 'Inactive',
+        'trash'        => 'Trash',
     ];
 
     $current     = $filterKind ?? request('kind'); // 'product'|'expense'|'both'|'inactive'|'trash'|null
