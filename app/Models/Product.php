@@ -18,6 +18,7 @@ class Product extends Model
     protected $fillable = [
         'name',
         'category_id',
+        'type',
         'price',
         'cost_price',
         'stock',
@@ -58,6 +59,18 @@ class Product extends Model
         return $this->hasMany(SaleItem::class);
     }
 
+    /** Recipe: raw materials needed to produce this product */
+    public function recipeItems(): HasMany
+    {
+        return $this->hasMany(ProductRecipe::class, 'product_id');
+    }
+
+    /** Reverse: recipes where this item is used as a raw material */
+    public function usedInRecipes(): HasMany
+    {
+        return $this->hasMany(ProductRecipe::class, 'raw_material_id');
+    }
+
     /* =========================================================================
      | Query scopes (handy for controllers)
      |======================================================================== */
@@ -74,6 +87,18 @@ class Product extends Model
     public function scopeCategoryId(Builder $q, $categoryId): Builder
     {
         return $categoryId ? $q->where('category_id', $categoryId) : $q;
+    }
+
+    /** Only finished products */
+    public function scopeProducts(Builder $q): Builder
+    {
+        return $q->where('type', 'product');
+    }
+
+    /** Only raw materials */
+    public function scopeRawMaterials(Builder $q): Builder
+    {
+        return $q->where('type', 'raw_material');
     }
 
     /* =========================================================================

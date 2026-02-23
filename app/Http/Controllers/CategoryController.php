@@ -104,35 +104,71 @@ public function restore(Request $request, $id)
     }
 }
 
-/** Permanently delete a soft-deleted category */
-public function forceDestroy(Request $request, $id)
-{
-    $ctx = $this->ctx($request, ['category_id' => $id]);
-    try {
-        $category = Category::onlyTrashed()->withCount(['products','expenses'])->findOrFail($id);
+    /** Permanently delete a soft-deleted category */
+    public function forceDestroy(Request $request, $id)
+    {
+        $ctx = $this->ctx($request, ['category_id' => $id]);
+        try {
+            $category = Category::onlyTrashed()->withCount(['products','expenses'])->findOrFail($id);
 
-        // Safety: block if still referenced (avoid FK errors / orphans)
-        if (($category->products_count ?? 0) > 0 || ($category->expenses_count ?? 0) > 0) {
-            Log::warning('Categories.forceDestroy.blocked_in_use', array_merge($ctx, [
-                'products_count' => $category->products_count,
-                'expenses_count' => $category->expenses_count,
-            ]));
-            return back()->with('error', "Cannot delete forever: category is in use. Ref: {$ctx['rid']}");
+            // Block if category has expenses (financial records must not be orphaned)
+            if (($category->expenses_count ?? 0) > 0) {
+                Log::warning('Categories.forceDestroy.blocked_expenses', array_merge($ctx, [
+                    'expenses_count' => $category->expenses_count,
+                ]));
+                return back()->with('error', "Cannot delete forever: category still has {$category->expenses_count} expense(s). Ref: {$ctx['rid']}");
+            }
+
+            DB::beginTransaction();
+
+            $productsDeleted = 0;
+
+            // Cascade-delete all products in this category
+            if (($category->products_count ?? 0) > 0) {
+                $products = \App\Models\Product::where('category_id', $category->id)->get();
+                $productsDeleted = $products->count();
+
+                foreach ($products as $product) {
+                    // Delete related records first
+                    $product->stockMovements()->delete();
+                    $product->recipeItems()->delete();
+
+                    // Delete recipe items where this product is used as a raw material
+                    \App\Models\ProductRecipe::where('raw_material_id', $product->id)->delete();
+
+                    // Delete production materials referencing this product
+                    \App\Models\ProductionMaterial::where('raw_material_id', $product->id)->delete();
+
+                    $product->delete();
+                }
+
+                Log::info('Categories.forceDestroy.cascade_products', array_merge($ctx, [
+                    'products_deleted' => $productsDeleted,
+                ]));
+            }
+
+            $category->forceDelete();
+
+            DB::commit();
+
+            Log::info('Categories.forceDestroy.success', $ctx);
+
+            $msg = "🧨 Category permanently deleted";
+            if ($productsDeleted > 0) {
+                $msg .= " along with {$productsDeleted} product(s)";
+            }
+            $msg .= ". (ref: {$ctx['rid']})";
+
+            return redirect()
+                ->route('categories.index', array_merge($request->except('page'), ['kind' => 'trash']))
+                ->with('success', $msg);
+
+        } catch (Throwable $e) {
+            DB::rollBack();
+            Log::error('Categories.forceDestroy.error', array_merge($ctx, ['message' => $e->getMessage()]));
+            return back()->with('error', "Permanent delete failed. Ref: {$ctx['rid']}");
         }
-
-        $category->forceDelete();
-
-        Log::info('Categories.forceDestroy.success', $ctx);
-
-        return redirect()
-            ->route('categories.index', array_merge($request->except('page'), ['kind' => 'trash']))
-            ->with('success', "🧨 Category permanently deleted. (ref: {$ctx['rid']})");
-
-    } catch (Throwable $e) {
-        Log::error('Categories.forceDestroy.error', array_merge($ctx, ['message' => $e->getMessage()]));
-        return back()->with('error', "Permanent delete failed. Ref: {$ctx['rid']}");
     }
-}
 
     public function create(Request $request)
     {

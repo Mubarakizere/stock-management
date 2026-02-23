@@ -25,7 +25,8 @@ class ProductController extends Controller
         $categories = Category::active()->forProducts()->orderBy('name')->get();
 
         $query = Product::query()
-            ->with(['category' => fn($q) => $q->withTrashed()])
+        ->products()
+            ->with(['category' => fn($q) => $q->withTrashed(), 'recipeItems'])
             ->withSum(['stockMovements as qty_in' => fn($q) => $q->where('type', 'in')], 'quantity')
             ->withSum(['stockMovements as qty_out' => fn($q) => $q->where('type', 'out')], 'quantity')
             ->withSum(['stockMovements as qty_returned' => function ($q) {
@@ -124,6 +125,7 @@ class ProductController extends Controller
             $product = Product::create([
                 'name'        => $request->name,
                 'category_id' => $request->integer('category_id'),
+                'type'        => 'product',
                 'price'       => $request->input('price'),
                 'stock'       => $request->input('stock'),
             ]);
@@ -242,6 +244,42 @@ class ProductController extends Controller
         } catch (\Throwable $e) {
             Log::error('Product delete failed', ['error' => $e->getMessage()]);
             return back()->withErrors(['error' => 'Failed to delete product: ' . $e->getMessage()]);
+        }
+    }
+
+    /** Bulk delete selected products */
+    public function bulkDestroy(Request $request)
+    {
+        $request->validate([
+            'ids'   => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer', 'exists:products,id'],
+        ]);
+
+        $ids = $request->input('ids');
+
+        try {
+            DB::beginTransaction();
+
+            $products = Product::whereIn('id', $ids)->get();
+            $count = $products->count();
+
+            foreach ($products as $product) {
+                // Delete related records
+                $product->stockMovements()->delete();
+                $product->recipeItems()->delete();
+                \App\Models\ProductRecipe::where('raw_material_id', $product->id)->delete();
+                \App\Models\ProductionMaterial::where('raw_material_id', $product->id)->delete();
+                $product->delete();
+            }
+
+            DB::commit();
+
+            Log::info('Products bulk deleted', ['count' => $count, 'ids' => $ids]);
+            return redirect()->route('products.index')->with('success', "{$count} product(s) deleted successfully.");
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('Bulk delete failed', ['error' => $e->getMessage()]);
+            return back()->withErrors(['error' => 'Bulk delete failed: ' . $e->getMessage()]);
         }
     }
 

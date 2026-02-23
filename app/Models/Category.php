@@ -61,7 +61,7 @@ class Category extends Model
 
     public function scopeForProducts($q)
     {
-        return $q->whereIn('kind', ['product','both','raw_material']);
+        return $q->whereIn('kind', ['product','both']);
     }
 
     public function scopeForRawMaterials($q)

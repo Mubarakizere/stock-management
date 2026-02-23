@@ -215,10 +215,46 @@
         @endif
 
         {{-- Table --}}
-        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm overflow-x-auto">
+        <div x-data="bulkSelect()" class="relative">
+
+            {{-- Bulk Actions Bar --}}
+            <div x-show="selectedIds.length > 0" x-transition x-cloak
+                 class="mb-3 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700 rounded-xl px-4 py-3 flex items-center justify-between">
+                <div class="flex items-center gap-2 text-sm text-indigo-700 dark:text-indigo-300">
+                    <i data-lucide="check-square" class="w-4 h-4"></i>
+                    <span><strong x-text="selectedIds.length"></strong> product(s) selected</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" @click="selectedIds = []; allSelected = false"
+                            class="btn btn-outline text-xs px-3 py-1.5">
+                        Clear
+                    </button>
+                    @can('products.delete')
+                        <button type="button" @click="$store.bulkConfirm.open = true"
+                                class="btn btn-danger text-xs px-3 py-1.5 flex items-center gap-1">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            Delete Selected
+                        </button>
+                    @endcan
+                </div>
+            </div>
+
+            {{-- Hidden form for bulk delete --}}
+            <form id="bulk-delete-form" action="{{ route('products.bulk-delete') }}" method="POST" class="hidden">
+                @csrf
+                <template x-for="id in selectedIds" :key="id">
+                    <input type="hidden" name="ids[]" :value="id">
+                </template>
+            </form>
+
+            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm overflow-x-auto">
             <table class="min-w-[1200px] w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
                 <thead class="bg-gray-50 dark:bg-gray-900/40 text-gray-700 dark:text-gray-300 uppercase text-xs font-medium">
                     <tr>
+                        <th class="px-4 py-3 w-10">
+                            <input type="checkbox" x-model="allSelected" @change="toggleAll()"
+                                   class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500">
+                        </th>
                         <th class="px-4 py-3 text-left">Name</th>
                         <th class="px-4 py-3 text-left">Category</th>
                         <th class="px-4 py-3 text-left">SKU</th>
@@ -255,7 +291,14 @@
                             $dot   = $cat->color ?? '#6b7280';
                         @endphp
 
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/40 transition" data-product-id="{{ $p->id }}">
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/40 transition" :class="selectedIds.includes({{ $p->id }}) ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''" data-product-id="{{ $p->id }}">
+                            {{-- Checkbox --}}
+                            <td class="px-4 py-3">
+                                <input type="checkbox" value="{{ $p->id }}"
+                                       x-model.number="selectedIds"
+                                       @change="updateAllSelected()"
+                                       class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500">
+                            </td>
                             {{-- Name --}}
                             <td class="px-4 py-3 text-gray-900 dark:text-gray-100 font-medium">
                                 @can('products.view')
@@ -360,90 +403,29 @@
 
                             {{-- Actions --}}
                             <td class="px-4 py-3 text-right whitespace-nowrap">
-                                <div x-data="{ open: false }" class="relative inline-block text-left">
-                                    <button 
-                                        @click="open = !open" 
-                                        @click.outside="open = false"
-                                        class="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 transition"
-                                    >
-                                        <i data-lucide="more-vertical" class="w-4 h-4"></i>
-                                    </button>
-
-                                    <div 
-                                        x-show="open" 
-                                        x-cloak
-                                        x-transition:enter="transition ease-out duration-100"
-                                        x-transition:enter-start="opacity-0 scale-95"
-                                        x-transition:enter-end="opacity-100 scale-100"
-                                        x-transition:leave="transition ease-in duration-75"
-                                        x-transition:leave-start="opacity-100 scale-100"
-                                        x-transition:leave-end="opacity-0 scale-95"
-                                        class="absolute right-0 z-50 mt-2 w-48 origin-top-right rounded-md bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none divide-y divide-gray-100 dark:divide-gray-700"
-                                    >
-                                        <div class="py-1">
-                                            @can('products.view')
-                                                <a href="{{ route('products.show', $p) }}" class="group flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
-                                                    <i data-lucide="eye" class="mr-3 h-4 w-4 text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400"></i>
-                                                    View Details
-                                                </a>
-                                            @endcan
-
-                                            @can('products.edit')
-                                                <a href="{{ route('products.edit', $p) }}" class="group flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
-                                                    <i data-lucide="edit-3" class="mr-3 h-4 w-4 text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400"></i>
-                                                    Edit Product
-                                                </a>
-                                            @endcan
-                                        </div>
-
-                                        <div class="py-1">
-                                            @can('products.edit')
-                                                <button 
-                                                    @click="open = false; $store.quickAdjust.open({{ $p->id }}, '{{ addslashes($p->name) }}', {{ $stk }})"
-                                                    class="group flex w-full items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                                >
-                                                    <i data-lucide="plus-minus" class="mr-3 h-4 w-4 text-gray-400 group-hover:text-amber-600 dark:group-hover:text-amber-400"></i>
-                                                    Adjust Stock
-                                                </button>
-                                            @endcan
-
-                                            @can('stock.view')
-                                                <a href="{{ route('stock.history', ['product_id' => $p->id]) }}" class="group flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
-                                                    <i data-lucide="history" class="mr-3 h-4 w-4 text-gray-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400"></i>
-                                                    Stock History
-                                                </a>
-                                            @endcan
-                                        </div>
-
-                                        @can('products.delete')
-                                            <div class="py-1">
-                                                <form action="{{ route('products.destroy', $p) }}" method="POST">
-                                                    @csrf
-                                                    @method('DELETE')
-                                                    <button 
-                                                        type="button"
-                                                        @click="open = false; $store.confirm.openWith($el.closest('form'))"
-                                                        class="group flex w-full items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-rose-50 dark:hover:bg-rose-900/20"
-                                                    >
-                                                        <i data-lucide="trash-2" class="mr-3 h-4 w-4 text-gray-400 group-hover:text-rose-600 dark:group-hover:text-rose-400"></i>
-                                                        <span class="group-hover:text-rose-600 dark:group-hover:text-rose-400">Delete Product</span>
-                                                    </button>
-                                                </form>
-                                            </div>
-                                        @endcan
-                                    </div>
-                                </div>
+                                <button
+                                    type="button"
+                                    @click="$store.productActions.open({{ $p->id }}, '{{ addslashes($p->name) }}', {{ $stk }}, {{ $p->recipeItems ? $p->recipeItems->count() : 0 }})"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg
+                                           bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300
+                                           hover:bg-indigo-100 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-300
+                                           transition-all"
+                                >
+                                    <i data-lucide="settings-2" class="w-3.5 h-3.5"></i>
+                                    Actions
+                                </button>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="12" class="px-4 py-6 text-center text-gray-500 dark:text-gray-400 text-sm">
+                            <td colspan="13" class="px-4 py-6 text-center text-gray-500 dark:text-gray-400 text-sm">
                                 No products found.
                             </td>
                         </tr>
                     @endforelse
                 </tbody>
             </table>
+        </div>
         </div>
 
         {{-- Pagination --}}
@@ -455,6 +437,136 @@
 
     @endcannot
 </div>
+
+{{-- Product Actions Modal --}}
+<div
+    x-data
+    x-show="$store.productActions.show"
+    x-cloak
+    class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm"
+    @keydown.escape.window="$store.productActions.close()"
+>
+    <div
+        @click.outside="$store.productActions.close()"
+        x-show="$store.productActions.show"
+        x-transition:enter="transition ease-out duration-200"
+        x-transition:enter-start="opacity-0 translate-y-8 sm:translate-y-4 sm:scale-95"
+        x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+        x-transition:leave="transition ease-in duration-150"
+        x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
+        x-transition:leave-end="opacity-0 translate-y-8 sm:translate-y-4 sm:scale-95"
+        class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700
+               rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md mx-0 sm:mx-4
+               max-h-[85vh] overflow-y-auto"
+    >
+        {{-- Header --}}
+        <div class="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-5 py-4 flex items-center justify-between rounded-t-2xl">
+            <div>
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100" x-text="$store.productActions.name"></h2>
+                <div class="flex items-center gap-2 mt-1">
+                    <span class="text-xs text-gray-500 dark:text-gray-400">Current stock:</span>
+                    <span class="px-2 py-0.5 text-xs font-semibold rounded-full"
+                          :class="$store.productActions.stock <= 0
+                              ? 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300'
+                              : ($store.productActions.stock <= 5
+                                  ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                                  : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300')"
+                          x-text="$store.productActions.stock"></span>
+                </div>
+            </div>
+            <button @click="$store.productActions.close()" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition">
+                <i data-lucide="x" class="w-5 h-5 text-gray-400"></i>
+            </button>
+        </div>
+
+        {{-- Action Cards --}}
+        <div class="p-4 grid grid-cols-2 gap-3">
+            @can('products.view')
+                <a :href="'/products/' + $store.productActions.id"
+                   class="group flex flex-col items-center gap-2 p-4 rounded-xl border border-gray-200 dark:border-gray-700
+                          hover:border-indigo-300 dark:hover:border-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all">
+                    <div class="p-2.5 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 group-hover:bg-indigo-200 dark:group-hover:bg-indigo-800/40 transition">
+                        <i data-lucide="eye" class="w-5 h-5 text-indigo-600 dark:text-indigo-400"></i>
+                    </div>
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">View Details</span>
+                </a>
+            @endcan
+
+            @can('products.edit')
+                <a :href="'/products/' + $store.productActions.id + '/edit'"
+                   class="group flex flex-col items-center gap-2 p-4 rounded-xl border border-gray-200 dark:border-gray-700
+                          hover:border-blue-300 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all">
+                    <div class="p-2.5 rounded-xl bg-blue-100 dark:bg-blue-900/30 group-hover:bg-blue-200 dark:group-hover:bg-blue-800/40 transition">
+                        <i data-lucide="edit-3" class="w-5 h-5 text-blue-600 dark:text-blue-400"></i>
+                    </div>
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Edit Product</span>
+                </a>
+            @endcan
+
+            @can('products.view')
+                <a :href="'/products/' + $store.productActions.id + '/recipe'"
+                   class="group flex flex-col items-center gap-2 p-4 rounded-xl border border-gray-200 dark:border-gray-700
+                          hover:border-violet-300 dark:hover:border-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all relative">
+                    <div class="p-2.5 rounded-xl bg-violet-100 dark:bg-violet-900/30 group-hover:bg-violet-200 dark:group-hover:bg-violet-800/40 transition">
+                        <i data-lucide="chef-hat" class="w-5 h-5 text-violet-600 dark:text-violet-400"></i>
+                    </div>
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Recipe</span>
+                    <span class="absolute top-2 right-2 px-1.5 py-0.5 text-[10px] font-semibold rounded-full"
+                          :class="$store.productActions.recipeCount > 0
+                              ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300'
+                              : 'bg-gray-100 dark:bg-gray-700 text-gray-500'"
+                          x-text="$store.productActions.recipeCount > 0 ? $store.productActions.recipeCount : 'None'"></span>
+                </a>
+            @endcan
+
+            @can('products.edit')
+                <button type="button"
+                        @click="$store.productActions.close(); $store.quickAdjust.open($store.productActions.id, $store.productActions.name, $store.productActions.stock)"
+                        class="group flex flex-col items-center gap-2 p-4 rounded-xl border border-gray-200 dark:border-gray-700
+                               hover:border-amber-300 dark:hover:border-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-all">
+                    <div class="p-2.5 rounded-xl bg-amber-100 dark:bg-amber-900/30 group-hover:bg-amber-200 dark:group-hover:bg-amber-800/40 transition">
+                        <i data-lucide="plus-minus" class="w-5 h-5 text-amber-600 dark:text-amber-400"></i>
+                    </div>
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Adjust Stock</span>
+                </button>
+            @endcan
+
+            @can('stock.view')
+                <a :href="'/stock/history?product_id=' + $store.productActions.id"
+                   class="group flex flex-col items-center gap-2 p-4 rounded-xl border border-gray-200 dark:border-gray-700
+                          hover:border-emerald-300 dark:hover:border-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all">
+                    <div class="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 group-hover:bg-emerald-200 dark:group-hover:bg-emerald-800/40 transition">
+                        <i data-lucide="history" class="w-5 h-5 text-emerald-600 dark:text-emerald-400"></i>
+                    </div>
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Stock History</span>
+                </a>
+            @endcan
+
+            @can('products.delete')
+                <button type="button"
+                        @click="$store.productActions.close(); $store.productActions.confirmDelete()"
+                        class="group flex flex-col items-center gap-2 p-4 rounded-xl border border-gray-200 dark:border-gray-700
+                               hover:border-rose-300 dark:hover:border-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all">
+                    <div class="p-2.5 rounded-xl bg-rose-100 dark:bg-rose-900/30 group-hover:bg-rose-200 dark:group-hover:bg-rose-800/40 transition">
+                        <i data-lucide="trash-2" class="w-5 h-5 text-rose-600 dark:text-rose-400"></i>
+                    </div>
+                    <span class="text-sm font-medium text-rose-600 dark:text-rose-400">Delete</span>
+                </button>
+            @endcan
+        </div>
+
+        {{-- Mobile drag handle --}}
+        <div class="sm:hidden pb-3 flex justify-center">
+            <div class="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600"></div>
+        </div>
+    </div>
+</div>
+
+{{-- Hidden delete form for product actions modal --}}
+<form id="product-action-delete-form" method="POST" class="hidden">
+    @csrf
+    @method('DELETE')
+</form>
 
 {{-- Global Delete Confirmation Modal --}}
 @can('products.delete')
@@ -477,6 +589,43 @@
             <button type="button" class="btn btn-outline" @click="$store.confirm.close()">Cancel</button>
             <button type="button" class="btn btn-danger" @click="$store.confirm.confirm()">
                 Delete
+            </button>
+        </div>
+    </div>
+</div>
+@endcan
+
+{{-- Bulk Delete Confirmation Modal --}}
+@can('products.delete')
+<div
+    x-data
+    x-show="$store.bulkConfirm.open"
+    x-cloak
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+    @keydown.escape.window="$store.bulkConfirm.open = false"
+>
+    <div
+        @click.outside="$store.bulkConfirm.open = false"
+        class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl p-6 w-full max-w-md"
+    >
+        <div class="flex items-center gap-2 mb-2">
+            <div class="p-2 rounded-full bg-rose-100 dark:bg-rose-900/30">
+                <i data-lucide="alert-triangle" class="w-5 h-5 text-rose-600 dark:text-rose-400"></i>
+            </div>
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Bulk Delete Products</h2>
+        </div>
+        <p class="text-gray-600 dark:text-gray-300 text-sm mb-1">
+            Are you sure you want to delete the selected products?
+        </p>
+        <p class="text-rose-600 dark:text-rose-400 text-xs mb-6">
+            This will also remove their stock movements, recipes, and production references. This action cannot be undone.
+        </p>
+        <div class="flex justify-end gap-3">
+            <button type="button" class="btn btn-outline" @click="$store.bulkConfirm.open = false">Cancel</button>
+            <button type="button" class="btn btn-danger flex items-center gap-1"
+                    @click="$store.bulkConfirm.open = false; document.getElementById('bulk-delete-form').submit()">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                Delete All
             </button>
         </div>
     </div>
@@ -637,7 +786,54 @@
         if (window.lucide) lucide.createIcons();
     });
 
+    // Bulk selection component
+    function bulkSelect() {
+        return {
+            selectedIds: [],
+            allSelected: false,
+            pageIds: [{{ $products->pluck('id')->join(',') }}],
+
+            toggleAll() {
+                this.selectedIds = this.allSelected ? [...this.pageIds] : [];
+            },
+
+            updateAllSelected() {
+                this.allSelected = this.pageIds.length > 0 && this.pageIds.every(id => this.selectedIds.includes(id));
+            },
+        };
+    }
+
     document.addEventListener('alpine:init', () => {
+        // Product Actions Modal store
+        Alpine.store('productActions', {
+            show: false,
+            id: null,
+            name: '',
+            stock: 0,
+            recipeCount: 0,
+
+            open(id, name, stock, recipeCount) {
+                this.id = id;
+                this.name = name;
+                this.stock = stock;
+                this.recipeCount = recipeCount;
+                this.show = true;
+            },
+
+            close() {
+                this.show = false;
+            },
+
+            confirmDelete() {
+                const form = document.getElementById('product-action-delete-form');
+                form.action = '/products/' + this.id;
+                Alpine.store('confirm').openWith(form);
+            },
+        });
+
+        // Bulk delete confirm store
+        Alpine.store('bulkConfirm', { open: false });
+
         // Global delete-confirm store (same pattern as sales)
         Alpine.store('confirm', {
             open: false,

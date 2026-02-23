@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\{Sale, SaleItem, Purchase, Loan, LoanPayment, DebitCredit, Product, Expense, Category};
+use App\Models\{Sale, SaleItem, Purchase, Loan, LoanPayment, DebitCredit, Product, Expense, Category, Production};
 use Carbon\Carbon;
 use Illuminate\Support\Facades\{DB, Auth, Schema, Log};
 use Illuminate\Contracts\View\View;
@@ -109,6 +109,44 @@ class DashboardController extends Controller
                                     ->take(8)
                                     ->get();
 
+            // ========== RAW MATERIALS ==========
+            $rawMaterialsTotal     = Product::rawMaterials()->count();
+            $rawMaterialsLowStock  = 0;
+            $rawMaterialsStockValue = 0.0;
+            $lowStockRawMaterials  = collect();
+            try {
+                $allRawMaterials = Product::rawMaterials()->get(['id', 'name', 'cost_price']);
+                foreach ($allRawMaterials as $rm) {
+                    $stock = $rm->currentStock();
+                    $rm->current_stock = $stock;
+                    $rm->stock_value   = round($stock * (float)$rm->cost_price, 2);
+                    $rawMaterialsStockValue += $rm->stock_value;
+                    if ($rm->isLowStock()) $rawMaterialsLowStock++;
+                }
+                $lowStockRawMaterials = $allRawMaterials
+                    ->filter(fn($rm) => $rm->isLowStock())
+                    ->sortBy('current_stock')
+                    ->take(6)
+                    ->values();
+            } catch (\Exception $e) {
+                Log::warning('Raw material stats failed: ' . $e->getMessage());
+            }
+
+            // ========== PRODUCTIONS ==========
+            $totalProductions      = 0;
+            $monthProductions      = 0;
+            $recentProductions     = collect();
+            try {
+                $totalProductions  = Production::count();
+                $monthProductions  = Production::where('created_at', '>=', $monthStart)->count();
+                $recentProductions = Production::with('product:id,name')
+                    ->latest()
+                    ->take(5)
+                    ->get(['id', 'product_id', 'quantity', 'created_at', 'status']);
+            } catch (\Exception $e) {
+                Log::warning('Production stats failed: ' . $e->getMessage());
+            }
+
             return view('dashboard', compact(
                 'role', 'sections',
                 'totalSales', 'totalPurchases', 'totalProfit', 'pendingBalances',
@@ -121,7 +159,9 @@ class DashboardController extends Controller
                 'recentTransactions',
                 'months', 'salesTrend', 'purchaseTrend', 'chartLabels', 'chartSales',
                 'topProducts', 'topCustomers',
-                'expenseByCategory', 'recentExpenses', 'activeLoansList'
+                'expenseByCategory', 'recentExpenses', 'activeLoansList',
+                'rawMaterialsTotal', 'rawMaterialsLowStock', 'rawMaterialsStockValue', 'lowStockRawMaterials',
+                'totalProductions', 'monthProductions', 'recentProductions'
             ));
 
         } catch (\Exception $e) {

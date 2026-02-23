@@ -31,7 +31,7 @@ class SaleController extends Controller
     public function create()
     {
         $customers = Customer::orderBy('name')->get();
-        $products  = Product::orderBy('name')->get(['id', 'name', 'price', 'cost_price']);
+        $products  = Product::products()->orderBy('name')->get(['id', 'name', 'price', 'cost_price']);
         $paymentChannels = PaymentChannel::where('is_active', true)->get();
         
         return view('sales.create', compact('customers', 'products', 'paymentChannels'));
@@ -279,7 +279,7 @@ class SaleController extends Controller
     public function edit(Sale $sale)
     {
         $customers = Customer::orderBy('name')->get(['id', 'name']);
-        $products  = Product::orderBy('name')->get(['id', 'name', 'price', 'cost_price']);
+        $products  = Product::products()->orderBy('name')->get(['id', 'name', 'price', 'cost_price']);
         $paymentChannels = PaymentChannel::where('is_active', true)->get();
         $sale->load(['items.product', 'payments']);
 
@@ -458,7 +458,30 @@ class SaleController extends Controller
         return redirect()->route('sales.index')->with('success', 'Sale deleted successfully.');
     }
 
-    /** ===================== INVOICE ===================== */
+    /** ===================== BULK DESTROY ===================== */
+    public function bulkDestroy(Request $request)
+    {
+        $ids = array_filter((array) $request->input('ids', []), 'is_numeric');
+        if (empty($ids)) {
+            return redirect()->route('sales.index')->with('error', 'No sales selected.');
+        }
+
+        $count = 0;
+        DB::transaction(function () use ($ids, &$count) {
+            foreach (Sale::whereIn('id', $ids)->cursor() as $sale) {
+                $sale->payments()->delete();
+                StockMovement::where('source_type', Sale::class)->where('source_id', $sale->id)->delete();
+                Transaction::where('sale_id', $sale->id)->delete();
+                $sale->items()->delete();
+                $sale->delete();
+                $count++;
+            }
+        });
+
+        return redirect()->route('sales.index')->with('success', "{$count} sale(s) deleted successfully.");
+    }
+
+
     public function invoice(Sale $sale)
     {
         $sale->load([

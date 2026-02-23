@@ -68,6 +68,10 @@
                     <i data-lucide="edit-3" class="w-4 h-4"></i>
                     Edit
                 </a>
+                <a href="{{ route('recipes.edit', $product) }}" class="btn btn-outline text-sm flex items-center gap-1" style="border-color: #ea580c; color: #ea580c;">
+                    <i data-lucide="chef-hat" class="w-4 h-4"></i>
+                    Recipe
+                </a>
                 <button
                     type="button"
                     class="btn btn-warning text-sm flex items-center gap-1"
@@ -130,6 +134,81 @@
             <x-stat-card title="Total Out" value="{{ $fmt0($totalOut) }}" color="red" />
             <x-stat-card title="Stock Value (at WAC)" value="RWF {{ $fmt2($product->stockValue()) }}" color="blue" />
         </div>
+
+        {{-- Recipe / Bill of Materials --}}
+        @php
+            $recipeItems = $product->recipeItems()->with('rawMaterial')->get();
+        @endphp
+        @if($recipeItems->isNotEmpty())
+            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm overflow-hidden">
+                <div class="p-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                    <h2 class="text-sm sm:text-base font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                        <i data-lucide="chef-hat" class="w-4 h-4 text-orange-600"></i>
+                        Recipe (Bill of Materials)
+                        <span class="px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 text-xs">{{ $recipeItems->count() }} ingredient(s)</span>
+                    </h2>
+                    @can('products.edit')
+                        <a href="{{ route('recipes.edit', $product) }}" class="text-orange-600 dark:text-orange-400 text-xs sm:text-sm hover:underline">
+                            Edit Recipe →
+                        </a>
+                    @endcan
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                        <thead class="bg-gray-50 dark:bg-gray-800/70 text-gray-700 dark:text-gray-300 uppercase text-xs font-semibold">
+                            <tr>
+                                <th class="px-4 py-3 text-left">Raw Material</th>
+                                <th class="px-4 py-3 text-right">Qty per Unit</th>
+                                <th class="px-4 py-3 text-right">Unit Cost</th>
+                                <th class="px-4 py-3 text-right">Line Cost</th>
+                                <th class="px-4 py-3 text-right">In Stock</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                            @php $recipeTotalCost = 0; @endphp
+                            @foreach($recipeItems as $ri)
+                                @php
+                                    $rm = $ri->rawMaterial;
+                                    $rmCost = $rm->price ?? 0;
+                                    $lineCost = $rmCost * $ri->quantity;
+                                    $recipeTotalCost += $lineCost;
+                                    $rmStock = $rm->currentStock();
+                                @endphp
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/60 transition">
+                                    <td class="px-4 py-3 text-gray-900 dark:text-gray-100 font-medium">
+                                        {{ $rm->name ?? '—' }}
+                                    </td>
+                                    <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                        {{ $fmt2($ri->quantity) }}
+                                    </td>
+                                    <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
+                                        RWF {{ $fmt2($rmCost) }}
+                                    </td>
+                                    <td class="px-4 py-3 text-right font-semibold text-gray-900 dark:text-gray-100">
+                                        RWF {{ $fmt2($lineCost) }}
+                                    </td>
+                                    <td class="px-4 py-3 text-right {{ $rmStock <= 0 ? 'text-rose-600' : 'text-gray-700 dark:text-gray-300' }}">
+                                        {{ $fmt0($rmStock) }}
+                                        @if($rmStock <= 0)
+                                            <span class="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300">Out</span>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                        <tfoot class="bg-gray-50 dark:bg-gray-800/70">
+                            <tr>
+                                <td class="px-4 py-3 font-semibold text-gray-800 dark:text-gray-100" colspan="3">Total Raw Material Cost</td>
+                                <td class="px-4 py-3 text-right font-bold text-gray-900 dark:text-gray-100">
+                                    RWF {{ $fmt2($recipeTotalCost) }}
+                                </td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        @endif
 
         {{-- Recent Stock Movements --}}
         @can('stock.view')

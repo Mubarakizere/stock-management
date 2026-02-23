@@ -33,6 +33,10 @@
                                 <input type="checkbox" x-model="showInsights" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
                                 <span class="ml-2 text-sm text-gray-700 dark:text-gray-200">Insights</span>
                             </label>
+                            <label class="flex items-center px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer">
+                                <input type="checkbox" x-model="showRawMaterials" class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                <span class="ml-2 text-sm text-gray-700 dark:text-gray-200">Raw Materials</span>
+                            </label>
                         </div>
                     </div>
                 </div>
@@ -52,6 +56,10 @@
             <div x-show="showInsights" x-collapse>
                 @include('dashboard._insights')
             </div>
+
+            <div x-show="showRawMaterials" x-collapse>
+                @include('dashboard._rawmaterials')
+            </div>
         </div>
     </div>
 
@@ -62,11 +70,13 @@
                 showKpis: JSON.parse(localStorage.getItem('dash_kpis') ?? 'true'),
                 showCharts: JSON.parse(localStorage.getItem('dash_charts') ?? 'true'),
                 showInsights: JSON.parse(localStorage.getItem('dash_insights') ?? 'true'),
+                showRawMaterials: JSON.parse(localStorage.getItem('dash_rawmaterials') ?? 'true'),
 
                 init() {
                     this.$watch('showKpis', v => localStorage.setItem('dash_kpis', v));
                     this.$watch('showCharts', v => localStorage.setItem('dash_charts', v));
                     this.$watch('showInsights', v => localStorage.setItem('dash_insights', v));
+                    this.$watch('showRawMaterials', v => localStorage.setItem('dash_rawmaterials', v));
                 }
             }
         }

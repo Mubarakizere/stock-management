@@ -27,7 +27,7 @@
             if(preset==='today'){
                 from = fmt(today); to = fmt(today);
             }else if(preset==='week'){
-                const day = today.getDay(); // 0-6
+                const day = today.getDay();
                 const diffToMon = (day === 0 ? -6 : 1 - day);
                 const monday = new Date(today); monday.setDate(today.getDate()+diffToMon);
                 const sunday = new Date(monday); sunday.setDate(monday.getDate()+6);
@@ -41,15 +41,47 @@
                 url.searchParams.delete('to');
                 window.location.href = url.toString(); return;
             }
-
-            if(from&&to){
-                url.searchParams.set('from', from);
-                url.searchParams.set('to', to);
-            }
+            if(from&&to){ url.searchParams.set('from', from); url.searchParams.set('to', to); }
             window.location.href = url.toString();
+        },
+
+        // Sale actions modal
+        sa: { open: false, id: null, name: '', viewUrl: '', editUrl: '', invoiceUrl: '', returnsUrl: '', deleteUrl: '' },
+        openSaleActions(id, name, viewUrl, editUrl, invoiceUrl, returnsUrl, deleteUrl) {
+            this.sa = { open: true, id, name, viewUrl, editUrl, invoiceUrl, returnsUrl, deleteUrl };
+        },
+        closeSaleActions() { this.sa.open = false; this.saConfirmDelete = false; },
+        saConfirmDelete: false,
+        confirmDeleteSale() {
+            if (!this.sa.deleteUrl) return;
+            const f = document.getElementById('sale-delete-form');
+            f.action = this.sa.deleteUrl;
+            f.submit();
+        },
+
+        // Bulk selection
+        selected: [],
+        allIds: [],
+        get allSelected() { return this.allIds.length > 0 && this.selected.length === this.allIds.length; },
+        get someSelected() { return this.selected.length > 0 && !this.allSelected; },
+        toggleAll() {
+            if (this.allSelected) { this.selected = []; }
+            else { this.selected = [...this.allIds]; }
+        },
+        bulkDelete() {
+            if (this.selected.length === 0) return;
+            if (!confirm(`Delete ${this.selected.length} selected sale(s)? Stock movements will be reversed.`)) return;
+            const f = document.getElementById('bulk-delete-form');
+            this.selected.forEach(id => {
+                const input = document.createElement('input');
+                input.type = 'hidden'; input.name = 'ids[]'; input.value = id;
+                f.appendChild(input);
+            });
+            f.submit();
         }
     }"
     class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6"
+    x-init="allIds = Array.from(document.querySelectorAll('.sale-row-cb')).map(el => el.value)"
 >
 
     {{-- Page Header --}}
@@ -300,6 +332,15 @@
             <table class="w-full text-sm text-left min-w-[1150px]">
                 <thead class="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 uppercase text-xs font-medium">
                     <tr>
+                        @can('sales.delete')
+                        <th class="px-4 py-3 w-10">
+                            <input type="checkbox"
+                                   :checked="allSelected"
+                                   :indeterminate.prop="someSelected"
+                                   @change="toggleAll()"
+                                   class="rounded border-gray-400 dark:border-gray-500 text-indigo-600">
+                        </th>
+                        @endcan
                         <th class="px-4 py-3">#</th>
                         <th class="px-4 py-3">Date</th>
                         <th class="px-4 py-3">Customer</th>
@@ -349,6 +390,14 @@
                         @endphp
 
                         <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/40 transition">
+                            @can('sales.delete')
+                            <td class="px-4 py-3">
+                                <input type="checkbox"
+                                       class="sale-row-cb rounded border-gray-400 dark:border-gray-500 text-indigo-600"
+                                       value="{{ $sale->id }}"
+                                       x-model="selected">
+                            </td>
+                            @endcan
                             <td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ $sale->id }}</td>
                             <td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ $date->format('Y-m-d') }}</td>
                             <td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ $sale->customer->name ?? 'Walk-in' }}</td>
@@ -409,44 +458,24 @@
                             </td>
 
                             <td class="px-4 py-3 text-right">
-                                <div class="flex justify-end flex-wrap gap-1.5">
-
-                                    @can('sales.view')
-                                        <a href="{{ route('sales.show', $sale) }}"
-                                           class="btn btn-secondary text-xs px-2.5 py-1.5 flex items-center gap-1">
-                                           <i data-lucide="eye" class="w-3.5 h-3.5"></i> View
-                                        </a>
-
-                                        <a href="{{ route('sales.invoice', $sale) }}" target="_blank"
-                                           class="btn btn-outline text-xs px-2.5 py-1.5 flex items-center gap-1">
-                                           <i data-lucide="file-text" class="w-3.5 h-3.5"></i> Invoice
-                                        </a>
-
-                                        <a href="{{ route('sales.show', $sale) }}?open=returns"
-                                           class="btn btn-outline text-xs px-2.5 py-1.5 flex items-center gap-1">
-                                           <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Returns
-                                        </a>
-                                    @endcan
-
-                                    @can('sales.edit')
-                                        <a href="{{ route('sales.edit', $sale) }}"
-                                           class="btn btn-outline text-xs px-2.5 py-1.5 flex items-center gap-1">
-                                           <i data-lucide="edit" class="w-3.5 h-3.5"></i> Edit
-                                        </a>
-                                    @endcan
-
-                                    @can('sales.delete')
-                                        {{-- Delete -> global confirm store --}}
-                                        <form action="{{ route('sales.destroy', $sale) }}" method="POST" class="inline">
-                                            @csrf @method('DELETE')
-                                            <button type="button"
-                                                    class="btn btn-danger text-xs px-2.5 py-1.5 inline-flex items-center gap-1"
-                                                    @click="$store.confirm.openWith($el.closest('form'))">
-                                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Delete
-                                            </button>
-                                        </form>
-                                    @endcan
-                                </div>
+                                <button
+                                    type="button"
+                                    @click="openSaleActions(
+                                        '{{ $sale->id }}',
+                                        '{{ addslashes($sale->customer->name ?? 'Walk-in') }}',
+                                        '{{ route('sales.show', $sale) }}',
+                                        '{{ route('sales.edit', $sale) }}',
+                                        '{{ route('sales.invoice', $sale) }}',
+                                        '{{ route('sales.show', $sale) }}?open=returns',
+                                        '{{ route('sales.destroy', $sale) }}'
+                                    )"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
+                                           bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300
+                                           hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-300
+                                           transition">
+                                    <i data-lucide="more-horizontal" class="w-3.5 h-3.5"></i>
+                                    Actions
+                                </button>
                             </td>
                         </tr>
                     @empty
@@ -465,32 +494,164 @@
             {{ $sales->links() }}
         </div>
 
-    @endcannot
-</div>
-
-{{-- Global Delete Confirmation Modal (Alpine Store) --}}
-@can('sales.delete')
-<div x-data
-     x-show="$store.confirm.open"
-     x-cloak
-     class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-     @keydown.escape.window="$store.confirm.close()"
-     x-transition>
-    <div @click.outside="$store.confirm.close()"
-         class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl p-6 w-full max-w-md">
-        <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">Confirm Deletion</h2>
-        <p class="text-gray-600 dark:text-gray-300 text-sm mb-6">
-            Are you sure you want to delete this sale? This action cannot be undone and will revert stock movements.
-        </p>
-        <div class="flex justify-end gap-3">
-            <button type="button" class="btn btn-outline" @click="$store.confirm.close()">Cancel</button>
-            <button type="button" class="btn btn-danger" @click="$store.confirm.confirm()">
-                Delete
+        {{-- Bulk delete bar --}}
+        @can('sales.delete')
+        <div
+            x-show="selected.length > 0"
+            x-cloak
+            x-transition:enter="transition ease-out duration-200"
+            x-transition:enter-start="opacity-0 translate-y-2"
+            x-transition:enter-end="opacity-100 translate-y-0"
+            class="fixed bottom-6 left-1/2 -translate-x-1/2 z-40
+                   flex items-center gap-3 px-5 py-3
+                   bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700
+                   rounded-2xl shadow-2xl"
+        >
+            <span class="text-sm font-medium text-gray-700 dark:text-gray-200" x-text="selected.length + ' selected'"></span>
+            <button type="button"
+                @click="selected = []"
+                class="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 underline">
+                Deselect all
+            </button>
+            <button type="button"
+                @click="bulkDelete()"
+                class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold
+                       bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                Delete selected
             </button>
         </div>
-    </div>
+        @endcan
+
+        {{-- Bulk delete hidden form --}}
+        @can('sales.delete')
+        <form id="bulk-delete-form" method="POST" action="{{ route('sales.bulk-delete') }}" class="hidden">
+            @csrf
+        </form>
+        @endcan
+
+        {{-- Sale Actions Modal (INSIDE x-data scope) --}}
+        <div
+            x-show="sa.open"
+            x-cloak
+            @keydown.escape.window="closeSaleActions()"
+            class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm"
+        >
+            <div
+                @click.outside="closeSaleActions()"
+                x-show="sa.open"
+                x-transition:enter="transition ease-out duration-200"
+                x-transition:enter-start="opacity-0 translate-y-6 sm:scale-95"
+                x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+                x-transition:leave="transition ease-in duration-150"
+                x-transition:leave-start="opacity-100 sm:scale-100"
+                x-transition:leave-end="opacity-0 translate-y-6 sm:scale-95"
+                class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700
+                       rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm mx-0 sm:mx-4 p-5"
+            >
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100" x-text="'Sale #' + sa.id"></h2>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5" x-text="sa.name"></p>
+                    </div>
+                    <button @click="closeSaleActions()" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition">
+                        <i data-lucide="x" class="w-4 h-4 text-gray-400"></i>
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    @can('sales.view')
+                    <a :href="sa.viewUrl"
+                       class="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-gray-200 dark:border-gray-700
+                              hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:border-indigo-200 dark:hover:border-indigo-700 transition group">
+                        <div class="p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30">
+                            <i data-lucide="eye" class="w-4 h-4 text-indigo-600 dark:text-indigo-400"></i>
+                        </div>
+                        <span class="text-xs font-medium text-gray-700 dark:text-gray-300 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">View Details</span>
+                    </a>
+
+                    <a :href="sa.invoiceUrl" target="_blank"
+                       class="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-gray-200 dark:border-gray-700
+                              hover:bg-sky-50 dark:hover:bg-sky-900/20 hover:border-sky-200 dark:hover:border-sky-700 transition group">
+                        <div class="p-2 rounded-lg bg-sky-100 dark:bg-sky-900/30">
+                            <i data-lucide="file-text" class="w-4 h-4 text-sky-600 dark:text-sky-400"></i>
+                        </div>
+                        <span class="text-xs font-medium text-gray-700 dark:text-gray-300 group-hover:text-sky-700 dark:group-hover:text-sky-300">Invoice</span>
+                    </a>
+
+                    <a :href="sa.returnsUrl"
+                       class="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-gray-200 dark:border-gray-700
+                              hover:bg-amber-50 dark:hover:bg-amber-900/20 hover:border-amber-200 dark:hover:border-amber-700 transition group">
+                        <div class="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30">
+                            <i data-lucide="rotate-ccw" class="w-4 h-4 text-amber-600 dark:text-amber-400"></i>
+                        </div>
+                        <span class="text-xs font-medium text-gray-700 dark:text-gray-300 group-hover:text-amber-700 dark:group-hover:text-amber-300">Returns</span>
+                    </a>
+                    @endcan
+
+                    @can('sales.edit')
+                    <a :href="sa.editUrl"
+                       class="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-gray-200 dark:border-gray-700
+                              hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:border-violet-200 dark:hover:border-violet-700 transition group">
+                        <div class="p-2 rounded-lg bg-violet-100 dark:bg-violet-900/30">
+                            <i data-lucide="edit" class="w-4 h-4 text-violet-600 dark:text-violet-400"></i>
+                        </div>
+                        <span class="text-xs font-medium text-gray-700 dark:text-gray-300 group-hover:text-violet-700 dark:group-hover:text-violet-300">Edit</span>
+                    </a>
+                    @endcan
+
+                    @can('sales.delete')
+                    <template x-if="!saConfirmDelete">
+                        <button type="button"
+                            @click="saConfirmDelete = true"
+                            class="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-gray-200 dark:border-gray-700
+                                   hover:bg-rose-50 dark:hover:bg-rose-900/20 hover:border-rose-200 dark:hover:border-rose-700 transition group w-full">
+                            <div class="p-2 rounded-lg bg-rose-100 dark:bg-rose-900/30">
+                                <i data-lucide="trash-2" class="w-4 h-4 text-rose-600 dark:text-rose-400"></i>
+                            </div>
+                            <span class="text-xs font-medium text-gray-700 dark:text-gray-300 group-hover:text-rose-700 dark:group-hover:text-rose-300">Delete</span>
+                        </button>
+                    </template>
+                    @endcan
+
+                    {{-- In-modal delete confirmation occupies full width when shown --}}
+                    @can('sales.delete')
+                    <template x-if="saConfirmDelete">
+                        <div class="col-span-2 mt-1 rounded-xl border border-rose-200 dark:border-rose-700 bg-rose-50 dark:bg-rose-900/20 p-4 space-y-3">
+                            <div class="flex items-start gap-2">
+                                <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0"></i>
+                                <p class="text-xs text-rose-800 dark:text-rose-300">
+                                    Delete <strong x-text="'Sale #' + sa.id"></strong>? This will reverse all stock movements and cannot be undone.
+                                </p>
+                            </div>
+                            <div class="flex gap-2">
+                                <button type="button"
+                                    @click="saConfirmDelete = false"
+                                    class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition">
+                                    Cancel
+                                </button>
+                                <button type="button"
+                                    @click="confirmDeleteSale()"
+                                    class="flex-1 py-1.5 text-xs font-semibold rounded-lg bg-rose-600 hover:bg-rose-700 text-white transition">
+                                    Yes, delete
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                    @endcan
+                </div>
+            </div>
+        </div>
+
+        {{-- Hidden delete form for single sale --}}
+        @can('sales.delete')
+        <form id="sale-delete-form" method="POST" action="" class="hidden">
+            @csrf @method('DELETE')
+        </form>
+        @endcan
+
+    @endcannot
 </div>
-@endcan
 
 {{-- Payments PDF Modal (Alpine Store) --}}
 @if ($paymentsPdfAction)

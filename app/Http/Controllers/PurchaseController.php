@@ -108,9 +108,9 @@ class PurchaseController extends Controller
     public function create()
     {
         $suppliers = Supplier::orderBy('name')->get();
-        $products  = Product::orderBy('name')->get(['id', 'name', 'cost_price']);
-        $categories = Category::active()->forProducts()->ordered()
-            ->with(['products' => fn($q) => $q->orderBy('name')])
+        $products  = Product::rawMaterials()->orderBy('name')->get(['id', 'name', 'cost_price']);
+        $categories = Category::active()->forRawMaterials()->ordered()
+            ->with(['products' => fn($q) => $q->rawMaterials()->orderBy('name')])
             ->get();
         $paymentChannels = PaymentChannel::where('is_active', true)->get();
 
@@ -263,9 +263,9 @@ class PurchaseController extends Controller
     public function edit(Purchase $purchase)
     {
         $suppliers = Supplier::orderBy('name')->get();
-        $products  = Product::orderBy('name')->get(['id', 'name', 'cost_price']);
-        $categories = Category::active()->forProducts()->ordered()
-            ->with(['products' => fn($q) => $q->orderBy('name')])
+        $products  = Product::rawMaterials()->orderBy('name')->get(['id', 'name', 'cost_price']);
+        $categories = Category::active()->forRawMaterials()->ordered()
+            ->with(['products' => fn($q) => $q->rawMaterials()->orderBy('name')])
             ->get();
         $purchase->load('items');
         $paymentChannels = PaymentChannel::where('is_active', true)->get();

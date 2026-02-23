@@ -22,6 +22,7 @@ use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\PurchaseReturnController;
+use App\Http\Controllers\RawMaterialController;
 use App\Http\Controllers\StatementController;
 use App\Http\Controllers\ItemLoanController;
 
@@ -184,6 +185,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('products.export.stock.pdf')
         ->middleware('permission:products.view');
 
+    Route::post('products/bulk-delete', [ProductController::class, 'bulkDestroy'])
+        ->name('products.bulk-delete')
+        ->middleware('permission:products.delete');
+
     Route::resource('products', ProductController::class)
         ->middleware('permission:products.view');
 
@@ -197,6 +202,36 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('products/{product}/quick-adjust', [App\Http\Controllers\StockAdjustmentController::class, 'quickAdjust'])
         ->name('products.quick-adjust')
         ->middleware('permission:products.edit');
+
+    // Raw Materials
+    Route::resource('raw-materials', RawMaterialController::class)
+        ->parameters(['raw-materials' => 'raw_material'])
+        ->middleware('permission:products.view');
+
+    // Recipes (Bill of Materials)
+    Route::get('products/{product}/recipe', [App\Http\Controllers\RecipeController::class, 'edit'])
+        ->name('recipes.edit')
+        ->middleware('permission:products.view');
+    Route::put('products/{product}/recipe', [App\Http\Controllers\RecipeController::class, 'update'])
+        ->name('recipes.update')
+        ->middleware('permission:products.edit');
+
+    // Productions
+    Route::middleware('permission:products.view')->group(function () {
+        Route::get('productions', [App\Http\Controllers\ProductionController::class, 'index'])
+            ->name('productions.index');
+        Route::get('productions/create', [App\Http\Controllers\ProductionController::class, 'create'])
+            ->name('productions.create')
+            ->middleware('permission:products.edit');
+        Route::post('productions', [App\Http\Controllers\ProductionController::class, 'store'])
+            ->name('productions.store')
+            ->middleware('permission:products.edit');
+        Route::get('productions/{production}', [App\Http\Controllers\ProductionController::class, 'show'])
+            ->name('productions.show');
+        Route::delete('productions/{production}', [App\Http\Controllers\ProductionController::class, 'destroy'])
+            ->name('productions.destroy')
+            ->middleware('permission:products.edit');
+    });
 
     // Suppliers
     Route::resource('suppliers', SupplierController::class)
@@ -275,6 +310,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Sales exports must be defined BEFORE the sales resource
         Route::get('/sales/export', [SaleController::class, 'export'])
             ->name('sales.export');
+
+        // Bulk delete (must be BEFORE the resource to avoid {sale} capturing it)
+        Route::post('/sales/bulk-delete', [SaleController::class, 'bulkDestroy'])
+            ->name('sales.bulk-delete')
+            ->middleware('permission:sales.delete');
 
         // Sales resource
         Route::resource('sales', SaleController::class)
@@ -448,6 +488,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Profit & Loss PDF
         Route::get('/reports/export/pl.pdf', [ReportsController::class, 'exportProfitLossPdf'])
             ->name('reports.export.pl.pdf');
+
+        // Manufacturing Reports
+        Route::get('/reports/manufacturing', [App\Http\Controllers\ManufacturingReportController::class, 'index'])
+            ->name('reports.manufacturing');
     });
 
     /*

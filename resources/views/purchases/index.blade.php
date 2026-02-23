@@ -10,9 +10,17 @@
 
 <div
     x-data="{
-        showDel:false, delAction:'', delName:'',
-        openDel(action, name){ this.delAction = action; this.delName = name; this.showDel = true },
-        closeDel(){ this.showDel=false; this.delAction=''; this.delName='' }
+        pa: { open: false, id: null, supplierName: '', viewUrl: '', editUrl: '', invoiceUrl: '', deleteUrl: '', deleteLabel: '' },
+        openPA(id, supplierName, viewUrl, editUrl, invoiceUrl, deleteUrl) {
+            this.pa = { open: true, id, supplierName, viewUrl, editUrl, invoiceUrl, deleteUrl };
+        },
+        closePA() { this.pa.open = false; },
+        confirmDeletePA() {
+            if (!this.pa.deleteUrl) return;
+            const f = document.getElementById('purchase-delete-form');
+            f.action = this.pa.deleteUrl;
+            f.submit();
+        }
     }"
     class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
@@ -413,47 +421,23 @@
                                 </td>
 
                                 <td class="px-5 py-3">
-                                    <div class="flex justify-end flex-wrap gap-1.5">
-                                        @can('purchases.view')
-                                            <a href="{{ route('purchases.show', $p) }}"
-                                               class="btn btn-secondary text-xs flex items-center gap-1">
-                                                <i data-lucide="eye" class="w-4 h-4"></i>
-                                                <span>View</span>
-                                            </a>
-                                        @endcan
-
-                                        @can('purchases.edit')
-                                            <a href="{{ route('purchases.edit', $p) }}"
-                                               class="btn btn-outline text-xs flex items-center gap-1">
-                                                <i data-lucide="file-edit" class="w-4 h-4"></i>
-                                                <span>Edit</span>
-                                            </a>
-                                        @endcan
-
-                                        @can('purchases.view')
-                                            @if (Route::has('purchases.invoice'))
-                                                <a href="{{ route('purchases.invoice', $p) }}"
-                                                   target="_blank"
-                                                   class="btn btn-outline text-xs flex items-center gap-1">
-                                                    <i data-lucide="file-text" class="w-4 h-4"></i>
-                                                    <span>Invoice</span>
-                                                </a>
-                                            @endif
-                                        @endcan
-
-                                        @can('purchases.delete')
-                                            <form x-on:submit.prevent="openDel($el.action, 'Purchase #{{ $p->id }}')"
-                                                  method="POST"
-                                                  action="{{ route('purchases.destroy', $p) }}">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button class="btn btn-danger text-xs flex items-center gap-1">
-                                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
-                                                    <span>Delete</span>
-                                                </button>
-                                            </form>
-                                        @endcan
-                                    </div>
+                                    <button
+                                        type="button"
+                                        @click="openPA(
+                                            '{{ $p->id }}',
+                                            '{{ addslashes(optional($p->supplier)->name ?? '—') }}',
+                                            '{{ route('purchases.show', $p) }}',
+                                            '{{ route('purchases.edit', $p) }}',
+                                            '{{ Route::has('purchases.invoice') ? route('purchases.invoice', $p) : '' }}',
+                                            '{{ route('purchases.destroy', $p) }}'
+                                        )"
+                                        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
+                                               bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300
+                                               hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-300
+                                               transition">
+                                        <i data-lucide="more-horizontal" class="w-3.5 h-3.5"></i>
+                                        Actions
+                                    </button>
                                 </td>
                             </tr>
                         @empty
@@ -500,39 +484,86 @@
             </div>
         </div>
 
-        {{-- DELETE MODAL (only if user can delete) --}}
-        @can('purchases.delete')
-            <div x-cloak x-show="showDel" class="fixed inset-0 z-40">
-                <div x-show="showDel" x-transition.opacity class="absolute inset-0 bg-black/40"></div>
-                <div x-show="showDel" x-transition class="absolute inset-0 flex items-center justify-center p-4">
-                    <div class="w-full max-w-md rounded-xl bg-white dark:bg-gray-900 ring-1 ring-gray-200 dark:ring-gray-800 shadow-xl">
-                        <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center gap-2">
-                            <i data-lucide="alert-triangle" class="w-5 h-5 text-rose-600"></i>
-                            <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                                Delete Purchase
-                            </h3>
-                        </div>
-                        <div class="px-5 py-4 text-sm text-gray-700 dark:text-gray-300">
-                            Are you sure you want to delete
-                            <span class="font-semibold" x-text="delName"></span>?
-                            This will revert any related stock movements.
-                        </div>
-                        <div class="px-5 py-4 border-t border-gray-200 dark:border-gray-800 flex justify-end gap-2">
-                            <button type="button" @click="closeDel()" class="btn btn-outline">
-                                Cancel
-                            </button>
-                            <form :action="delAction" method="POST">
-                                @csrf
-                                @method('DELETE')
-                                <button class="btn btn-danger">
-                                    Delete
-                                </button>
-                            </form>
-                        </div>
+        {{-- PURCHASE ACTIONS MODAL --}}
+        <div
+            x-show="pa.open"
+            x-cloak
+            @keydown.escape.window="closePA()"
+            class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm"
+        >
+            <div
+                @click.outside="closePA()"
+                x-show="pa.open"
+                x-transition:enter="transition ease-out duration-200"
+                x-transition:enter-start="opacity-0 translate-y-6 sm:scale-95"
+                x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+                x-transition:leave="transition ease-in duration-150"
+                x-transition:leave-start="opacity-100 sm:scale-100"
+                x-transition:leave-end="opacity-0 translate-y-6 sm:scale-95"
+                class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700
+                       rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-sm mx-0 sm:mx-4 p-5"
+            >
+                {{-- Header --}}
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100" x-text="'Purchase #' + pa.id"></h2>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5" x-text="pa.supplierName"></p>
                     </div>
+                    <button @click="closePA()" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition">
+                        <i data-lucide="x" class="w-4 h-4 text-gray-400"></i>
+                    </button>
+                </div>
+
+                {{-- Action cards --}}
+                <div class="grid grid-cols-2 gap-2">
+                    @can('purchases.view')
+                    <a :href="pa.viewUrl"
+                       class="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-gray-200 dark:border-gray-700
+                              hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:border-indigo-200 dark:hover:border-indigo-700 transition group">
+                        <div class="p-2 rounded-lg bg-indigo-100 dark:bg-indigo-900/30">
+                            <i data-lucide="eye" class="w-4 h-4 text-indigo-600 dark:text-indigo-400"></i>
+                        </div>
+                        <span class="text-xs font-medium text-gray-700 dark:text-gray-300 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">View Details</span>
+                    </a>
+                    @endcan
+
+                    @can('purchases.edit')
+                    <a :href="pa.editUrl"
+                       class="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-gray-200 dark:border-gray-700
+                              hover:bg-violet-50 dark:hover:bg-violet-900/20 hover:border-violet-200 dark:hover:border-violet-700 transition group">
+                        <div class="p-2 rounded-lg bg-violet-100 dark:bg-violet-900/30">
+                            <i data-lucide="file-edit" class="w-4 h-4 text-violet-600 dark:text-violet-400"></i>
+                        </div>
+                        <span class="text-xs font-medium text-gray-700 dark:text-gray-300 group-hover:text-violet-700 dark:group-hover:text-violet-300">Edit</span>
+                    </a>
+                    @endcan
+
+                    @can('purchases.view')
+                    <a :href="pa.invoiceUrl" target="_blank"
+                       x-show="pa.invoiceUrl"
+                       class="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-gray-200 dark:border-gray-700
+                              hover:bg-sky-50 dark:hover:bg-sky-900/20 hover:border-sky-200 dark:hover:border-sky-700 transition group">
+                        <div class="p-2 rounded-lg bg-sky-100 dark:bg-sky-900/30">
+                            <i data-lucide="file-text" class="w-4 h-4 text-sky-600 dark:text-sky-400"></i>
+                        </div>
+                        <span class="text-xs font-medium text-gray-700 dark:text-gray-300 group-hover:text-sky-700 dark:group-hover:text-sky-300">Invoice</span>
+                    </a>
+                    @endcan
+
+                    @can('purchases.delete')
+                    <button type="button"
+                        @click="if(confirm('Delete Purchase #' + pa.id + '? Stock movements will be reversed.')) confirmDeletePA()"
+                        class="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-gray-200 dark:border-gray-700
+                               hover:bg-rose-50 dark:hover:bg-rose-900/20 hover:border-rose-200 dark:hover:border-rose-700 transition group w-full">
+                        <div class="p-2 rounded-lg bg-rose-100 dark:bg-rose-900/30">
+                            <i data-lucide="trash-2" class="w-4 h-4 text-rose-600 dark:text-rose-400"></i>
+                        </div>
+                        <span class="text-xs font-medium text-gray-700 dark:text-gray-300 group-hover:text-rose-700 dark:group-hover:text-rose-300">Delete</span>
+                    </button>
+                    @endcan
                 </div>
             </div>
-        @endcan
+        </div>
 
     @endcannot
 </div>
@@ -545,4 +576,11 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 @endpush
+
+@can('purchases.delete')
+<form id="purchase-delete-form" method="POST" action="" class="hidden">
+    @csrf @method('DELETE')
+</form>
+@endcan
+
 @endsection

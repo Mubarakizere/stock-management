@@ -38,7 +38,7 @@
 
                 // Auto-expand based on current route
                 $salesActive = request()->routeIs('sales.*') || request()->routeIs('customers.*');
-                $inventoryActive = request()->routeIs('products.*') || request()->routeIs('stock.history*');
+                $inventoryActive = request()->routeIs('products.*') || request()->routeIs('raw-materials.*') || request()->routeIs('stock.history*') || request()->routeIs('productions.*');
                 $purchasesActive = request()->routeIs('purchases.*') || request()->routeIs('suppliers.*');
                 $financeActive = request()->routeIs('transactions.*')
                     || request()->routeIs('debits-credits.*')
@@ -95,7 +95,7 @@
                 </div>
             @endcanany
 
-            {{-- 📦 Inventory --}}
+            {{-- 📦 Inventory & Manufacturing --}}
             @canany(['products.view', 'stock.view'])
                 <div x-data="{ open: {{ $inventoryActive ? 'true' : 'false' }} }" class="mt-1">
                     <button type="button"
@@ -116,6 +116,24 @@
                                       {{ request()->routeIs('products.*') ? 'bg-white/20 font-medium text-white' : 'text-white/80' }}">
                                 <i data-lucide="box" class="w-3.5 h-3.5 inline mr-2"></i>
                                 Products
+                            </a>
+                        @endcan
+
+                        @can('products.view')
+                            <a href="{{ route('raw-materials.index') }}"
+                               class="block px-3 py-2 text-sm rounded-md hover:bg-white/10
+                                      {{ request()->routeIs('raw-materials.*') ? 'bg-white/20 font-medium text-white' : 'text-white/80' }}">
+                                <i data-lucide="flask-conical" class="w-3.5 h-3.5 inline mr-2"></i>
+                                Raw Materials
+                            </a>
+                        @endcan
+
+                        @can('products.view')
+                            <a href="{{ route('productions.index') }}"
+                               class="block px-3 py-2 text-sm rounded-md hover:bg-white/10
+                                      {{ request()->routeIs('productions.*') ? 'bg-white/20 font-medium text-white' : 'text-white/80' }}">
+                                <i data-lucide="factory" class="w-3.5 h-3.5 inline mr-2"></i>
+                                Production
                             </a>
                         @endcan
 
@@ -226,7 +244,7 @@
                 </div>
             @endcanany
 
-            {{-- 📊 Reports & Statements --}}
+            {{-- 📊 Reports --}}
             @can('reports.view')
                 <div x-data="{ open: {{ $reportsActive ? 'true' : 'false' }} }" class="mt-1">
                     <button type="button"
@@ -249,6 +267,13 @@
                                 Overview
                             </a>
                         @endif
+
+                        <a href="{{ route('reports.manufacturing') }}"
+                           class="block px-3 py-2 text-sm rounded-md hover:bg-white/10
+                                  {{ request()->routeIs('reports.manufacturing') ? 'bg-white/20 font-medium text-white' : 'text-white/80' }}">
+                            <i data-lucide="factory" class="w-3.5 h-3.5 inline mr-2"></i>
+                            Manufacturing
+                        </a>
 
                         <a href="{{ route('reports.suppliers.statement') }}"
                            class="block px-3 py-2 text-sm rounded-md hover:bg-white/10
@@ -309,7 +334,7 @@
                             </a>
                         @endcan
 
-                        {{-- Payment Channels (Admin only for now, reusing roles.view or similar if no specific permission yet) --}}
+                        {{-- Payment Channels --}}
                         @can('payment-channels.view')
                             <a href="{{ route('payment-channels.index') }}"
                                class="block px-3 py-2 text-sm rounded-md hover:bg-white/10
