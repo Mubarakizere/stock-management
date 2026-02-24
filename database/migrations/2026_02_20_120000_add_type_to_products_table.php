@@ -9,19 +9,20 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Add the type column with a safe default
-        Schema::table('products', function (Blueprint $table) {
-            $table->string('type', 20)->default('product')->after('category_id');
-        });
+        // Guard: only add the column if it doesn't already exist.
+        // This handles servers where the migration partially ran before.
+        if (!Schema::hasColumn('products', 'type')) {
+            Schema::table('products', function (Blueprint $table) {
+                $table->string('type', 20)->default('product')->after('category_id');
+            });
+        }
 
-        // CHECK constraint — only PostgreSQL supports it reliably here;
-        // MySQL 8.0.16+ / MariaDB 10.2.1+ do support it but older versions
-        // silently ignore it, so we add it only for pgsql to avoid syntax errors.
+        // CHECK constraint — only on PostgreSQL (MySQL/MariaDB versions vary in support).
         if (DB::getDriverName() === 'pgsql') {
             DB::statement("ALTER TABLE products ADD CONSTRAINT products_type_check CHECK (type IN ('product','raw_material'))");
         }
 
-        // Backfill: tag products whose category kind = 'raw_material'
+        // Backfill: tag products whose category kind = 'raw_material'.
         // MySQL/MariaDB uses UPDATE...JOIN; PostgreSQL uses UPDATE...FROM.
         if (DB::getDriverName() === 'pgsql') {
             DB::statement("
@@ -32,7 +33,7 @@ return new class extends Migration
                   AND c.kind = 'raw_material'
             ");
         } else {
-            // MySQL / MariaDB / SQLite compatible syntax
+            // MySQL / MariaDB / SQLite compatible
             DB::statement("
                 UPDATE products p
                 JOIN categories c ON p.category_id = c.id
@@ -44,7 +45,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        // Drop the CHECK constraint only on PostgreSQL (it was only added there)
+        // Drop CHECK constraint only on PostgreSQL
         if (DB::getDriverName() === 'pgsql') {
             DB::statement("ALTER TABLE products DROP CONSTRAINT IF EXISTS products_type_check");
         }
