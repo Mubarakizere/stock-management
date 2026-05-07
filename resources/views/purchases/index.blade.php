@@ -19,7 +19,16 @@
             if (!this.pa.deleteUrl) return;
             const f = document.getElementById('purchase-delete-form');
             f.action = this.pa.deleteUrl;
-            f.submit();
+            this.closePA();
+            window.dispatchEvent(new CustomEvent('open-delete-modal', {
+                detail: {
+                    formId: 'purchase-delete-form',
+                    title: 'Delete Purchase',
+                    message: 'Delete Purchase #' + this.pa.id + '? Stock movements will be reversed.',
+                    confirmText: 'Delete',
+                    confirmColor: 'btn-danger'
+                }
+            }));
         }
     }"
     class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -552,7 +561,7 @@
 
                     @can('purchases.delete')
                     <button type="button"
-                        @click="if(confirm('Delete Purchase #' + pa.id + '? Stock movements will be reversed.')) confirmDeletePA()"
+                        @click="confirmDeletePA()"
                         class="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-gray-200 dark:border-gray-700
                                hover:bg-rose-50 dark:hover:bg-rose-900/20 hover:border-rose-200 dark:hover:border-rose-700 transition group w-full">
                         <div class="p-2 rounded-lg bg-rose-100 dark:bg-rose-900/30">

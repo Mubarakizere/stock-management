@@ -205,6 +205,7 @@ class DashboardController extends Controller
             // We use a direct DB query for performance
             $value = DB::table('stock_movements')
                 ->join('products', 'stock_movements.product_id', '=', 'products.id')
+                ->whereNull('stock_movements.deleted_at')
                 ->selectRaw('SUM(CASE WHEN stock_movements.type = ? THEN stock_movements.quantity ELSE -stock_movements.quantity END * products.cost_price) as total', ['in'])
                 ->value('total');
 

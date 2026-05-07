@@ -570,13 +570,19 @@
                                         @endif
 
                                         @can('purchases.edit')
-                                            <form method="POST"
+                                            <form id="return-delete-form-{{ $ret->id }}" method="POST"
                                                   action="{{ route('purchases.returns.destroy', $ret) }}"
-                                                  onsubmit="return confirm('Delete this return and revert stock/ledger?');"
                                                   class="inline">
                                                 @csrf
                                                 @method('DELETE')
-                                                <button type="submit"
+                                                <button type="button"
+                                                        @click="$dispatch('open-delete-modal', {
+                                                            formId: 'return-delete-form-{{ $ret->id }}',
+                                                            title: 'Delete Return',
+                                                            message: 'Delete this return and revert stock/ledger?',
+                                                            confirmText: 'Delete Return',
+                                                            confirmColor: 'btn-danger'
+                                                        })"
                                                         class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700 hover:underline">
                                                     <i data-lucide="trash-2" class="w-4 h-4"></i>
                                                     <span>Delete</span>
