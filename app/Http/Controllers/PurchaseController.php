@@ -139,6 +139,7 @@ class PurchaseController extends Controller
             'products.*.product_id'   => 'required|exists:products,id',
             'products.*.quantity'     => 'required|numeric|min:0.01',
             'products.*.unit_cost'    => 'required|numeric|min:0',
+            'document'                => 'nullable|file|mimes:jpeg,png,jpg,pdf,doc,docx|max:5120',
         ]);
 
         if (empty($request->products)) {
@@ -167,6 +168,11 @@ class PurchaseController extends Controller
 
             $channel = $this->readChannel($request);
 
+            $documentPath = null;
+            if ($request->hasFile('document')) {
+                $documentPath = $request->file('document')->store('purchases/documents', 'public');
+            }
+
             // 2) Header
             $purchase = Purchase::create([
                 'supplier_id'     => $request->supplier_id,
@@ -182,6 +188,7 @@ class PurchaseController extends Controller
                 'amount_paid'     => $amountPaid,
                 'balance_due'     => $balanceDue,
                 'status'          => $status,
+                'document_path'   => $documentPath,
             ]);
 
             // 3) Items + movements (track affected products)
@@ -294,6 +301,7 @@ class PurchaseController extends Controller
             'products.*.product_id'   => 'required|exists:products,id',
             'products.*.quantity'     => 'required|numeric|min:0.01',
             'products.*.unit_cost'    => 'required|numeric|min:0',
+            'document'                => 'nullable|file|mimes:jpeg,png,jpg,pdf,doc,docx|max:5120',
         ]);
 
         if (empty($request->products)) {
@@ -330,6 +338,14 @@ class PurchaseController extends Controller
             $status          = $this->statusFromPayment($totalAmount, $amountPaid);
 
             $channel = $this->readChannel($request);
+
+            $documentPath = $purchase->document_path;
+            if ($request->hasFile('document')) {
+                if ($documentPath && \Illuminate\Support\Facades\Storage::disk('public')->exists($documentPath)) {
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($documentPath);
+                }
+                $documentPath = $request->file('document')->store('purchases/documents', 'public');
+            }
 
             // 3) Recreate items + movements
             $newIds = [];
@@ -380,6 +396,7 @@ class PurchaseController extends Controller
                 'amount_paid'     => $amountPaid,
                 'balance_due'     => $balanceDue,
                 'status'          => $status,
+                'document_path'   => $documentPath,
             ]);
 
             // 5) Sync Transaction (Handled by PurchaseObserver)
@@ -436,6 +453,11 @@ class PurchaseController extends Controller
                 ->delete();
 
             $purchase->items()->delete();
+            
+            if ($purchase->document_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($purchase->document_path)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($purchase->document_path);
+            }
+            
             $purchase->delete();
 
             // Recalc WAC after removal

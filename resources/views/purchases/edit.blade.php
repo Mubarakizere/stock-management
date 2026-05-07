@@ -19,6 +19,7 @@
         {{-- Form --}}
         <form method="POST"
               action="{{ route('purchases.update', $purchase) }}"
+              enctype="multipart/form-data"
               class="space-y-6">
             @csrf
             @method('PUT')

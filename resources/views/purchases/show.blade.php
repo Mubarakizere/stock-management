@@ -228,6 +228,14 @@
                 @if($reference !== '')
                     <p><span class="text-gray-500 dark:text-gray-400">Reference:</span> {{ $reference }}</p>
                 @endif
+                @if($purchase->document_path)
+                    <p class="flex items-center gap-1 mt-1">
+                        <span class="text-gray-500 dark:text-gray-400">Document:</span>
+                        <a href="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($purchase->document_path) }}" target="_blank" class="text-indigo-600 hover:underline flex items-center gap-1">
+                            <i data-lucide="paperclip" class="w-3.5 h-3.5"></i> View File
+                        </a>
+                    </p>
+                @endif
             </div>
         </div>
 

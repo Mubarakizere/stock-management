@@ -13,19 +13,12 @@
         $isEdit
             ? $purchase->items->map(fn($i) => [
                 'product_id' => (int)   $i->product_id,
+                'name'       => $i->product ? $i->product->name : 'Product #'.$i->product_id,
                 'quantity'   => (float) $i->quantity,
                 'unit_cost'  => (float) $i->unit_cost,
             ])->values()->all()
             : []
     ));
-
-    if ($initialLines->isEmpty()) {
-        $initialLines = collect([[
-            'product_id' => '',
-            'quantity'   => 1,
-            'unit_cost'  => 0,
-        ]]);
-    }
 
     $initialState = [
         'supplier_id'     => old('supplier_id', $isEdit ? $purchase->supplier_id : ''),
@@ -43,301 +36,298 @@
 @endphp
 
 <div x-data="purchaseForm(@js($initialState))" x-init="init()" class="space-y-6">
-    {{-- Top: supplier, date, channel, reference --}}
-    <section class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 grid grid-cols-1 md:grid-cols-4 gap-5">
-        <div>
-            <x-label value="Supplier" />
-            <select name="supplier_id" x-model="state.supplier_id" class="form-select" required>
-                <option value="">-- Select Supplier --</option>
-                @foreach($suppliers as $s)
-                    <option value="{{ $s->id }}">{{ $s->name }}</option>
-                @endforeach
-            </select>
-            @error('supplier_id')
-                <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
-            @enderror
+    
+    {{-- Progress Indicator --}}
+    <div class="mb-8 relative">
+        <div class="overflow-hidden h-2 mb-4 text-xs flex rounded-full bg-gray-200 dark:bg-gray-700">
+            <div :style="`width: ${((step - 1) / 2) * 100}%`" class="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-indigo-500 transition-all duration-300"></div>
         </div>
-
-        <div>
-            <x-label value="Purchase Date" />
-            <input type="date" name="purchase_date" x-model="state.purchase_date" class="form-input" required>
-            @error('purchase_date')
-                <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
-            @enderror
+        <div class="flex justify-between text-xs font-semibold text-gray-500 dark:text-gray-400">
+            <span :class="step >= 1 ? 'text-indigo-600 dark:text-indigo-400' : ''">1. Supplier Info</span>
+            <span :class="step >= 2 ? 'text-indigo-600 dark:text-indigo-400' : ''">2. Select Materials</span>
+            <span :class="step >= 3 ? 'text-indigo-600 dark:text-indigo-400' : ''">3. Review & Payment</span>
         </div>
+    </div>
 
-        <div>
-            <x-label value="Payment Channel" />
-            {{-- This is what the controller uses --}}
-            <select name="payment_channel" x-model="state.payment_channel" class="form-select">
-                @foreach($paymentChannels as $channel)
-                    <option value="{{ $channel->slug }}">{{ $channel->name }}</option>
-                @endforeach
-            </select>
-            <div class="flex gap-2 mt-2 flex-wrap">
-                @foreach($paymentChannels as $channel)
-                <button type="button"
-                        @click="setChannel('{{ $channel->slug }}')"
-                        class="px-2 py-1 rounded-md border text-sm"
-                        :class="state.payment_channel === '{{ $channel->slug }}' 
-                            ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700' 
-                            : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200'">
-                    {{ $channel->name }}
-                </button>
-                @endforeach
+    {{-- STEP 1: Basic Info --}}
+    <section x-show="step === 1" x-transition.opacity.duration.300ms class="space-y-6">
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm p-6 sm:p-8">
+            <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100 mb-6 border-b pb-3 dark:border-gray-700">Step 1: Choose Supplier</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <x-label value="Supplier *" class="text-lg mb-2" />
+                    <select name="supplier_id" x-model="state.supplier_id" class="form-select text-lg py-3" required>
+                        <option value="">-- Click to Select Supplier --</option>
+                        @foreach($suppliers as $s)
+                            <option value="{{ $s->id }}">{{ $s->name }}</option>
+                        @endforeach
+                    </select>
+                    @error('supplier_id')
+                        <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div>
+                    <x-label value="Purchase Date *" class="text-lg mb-2" />
+                    <input type="date" name="purchase_date" x-model="state.purchase_date" class="form-input text-lg py-3" required>
+                    @error('purchase_date')
+                        <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t dark:border-gray-700 mt-2">
+                    <div>
+                        <x-label value="Payment Method" />
+                        <select name="payment_channel" x-model="state.payment_channel" class="form-select hidden">
+                            @foreach($paymentChannels as $channel)
+                                <option value="{{ $channel->slug }}">{{ $channel->name }}</option>
+                            @endforeach
+                        </select>
+                        <div class="flex gap-3 mt-2 flex-wrap">
+                            @foreach($paymentChannels as $channel)
+                            <button type="button"
+                                    @click="setChannel('{{ $channel->slug }}')"
+                                    class="px-4 py-3 rounded-xl border text-sm font-semibold transition-colors flex-1 text-center"
+                                    :class="state.payment_channel === '{{ $channel->slug }}' 
+                                        ? 'bg-indigo-100 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-300 border-indigo-400 dark:border-indigo-500 shadow-inner' 
+                                        : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'">
+                                {{ $channel->name }}
+                            </button>
+                            @endforeach
+                        </div>
+                        @error('payment_channel')
+                            <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div>
+                        <x-label value="Reference / Invoice No. (Optional)" />
+                        <input type="text" name="method" x-model="state.method" class="form-input py-3 mt-2" placeholder="e.g. INV-12345">
+                        @error('method')
+                            <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
+                        @enderror
+                    </div>
+                </div>
             </div>
-            @error('payment_channel')
-                <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
-            @enderror
         </div>
-
-        <div>
-            <x-label value="Reference (optional)" />
-            {{-- Stored in purchases.method (reference/cheque/txn id) --}}
-            <input type="text"
-                   name="method"
-                   x-model="state.method"
-                   class="form-input"
-                   placeholder="Invoice # / Txn ID / Cheque no.">
-            @error('method')
-                <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
-            @enderror
+        
+        <div class="flex justify-end">
+            <button @click="nextStep()" type="button" class="btn btn-primary px-8 py-3 text-lg rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transition-all" :disabled="!state.supplier_id">
+                Next: Select Materials <i data-lucide="arrow-right" class="w-5 h-5"></i>
+            </button>
         </div>
     </section>
 
-    {{-- Items --}}
-    <section class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm overflow-hidden">
-        <div class="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-            <h3 class="font-medium text-gray-800 dark:text-gray-100">Products</h3>
-            <div class="flex gap-2">
-                <button type="button"
-                        class="btn btn-outline text-xs sm:text-sm"
-                        @click="addLine()">
-                    <i data-lucide="plus" class="w-4 h-4"></i>
-                    Add Product
-                </button>
-                <button type="button"
-                        class="btn btn-outline text-xs sm:text-sm"
-                        @click="clearLines()">
-                    Clear All
-                </button>
+    {{-- STEP 2: Raw Materials --}}
+    <section x-show="step === 2" x-transition.opacity.duration.300ms style="display: none;" class="space-y-6">
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm p-6 sm:p-8">
+            <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100 mb-6 border-b pb-3 dark:border-gray-700">Step 2: Add Raw Materials</h2>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                
+                {{-- Product Catalog --}}
+                <div class="lg:col-span-5 flex flex-col h-[500px]">
+                    <div class="mb-4 relative">
+                        <i data-lucide="search" class="w-5 h-5 absolute left-3 top-3 text-gray-400"></i>
+                        <input type="text" x-model="searchQuery" placeholder="Search materials..." class="form-input pl-10 py-3 rounded-xl border-gray-300 dark:border-gray-600 w-full shadow-sm">
+                    </div>
+                    
+                    <div class="flex-1 overflow-y-auto pr-2 space-y-2 border border-gray-200 dark:border-gray-700 rounded-xl p-2 bg-gray-50/50 dark:bg-gray-900/50">
+                        @foreach($products as $p)
+                            <div x-show="matchesSearch('{{ addslashes($p->name) }}')" class="flex justify-between items-center p-3 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-xl hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors shadow-sm">
+                                <div>
+                                    <h4 class="font-bold text-gray-800 dark:text-gray-100">{{ $p->name }}</h4>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Cost: RWF {{ number_format($p->cost_price ?? 0, 2) }}</p>
+                                </div>
+                                <button type="button" class="btn btn-primary btn-sm px-4 py-2 rounded-lg flex items-center gap-1" @click="addToCart({{ $p->id }}, '{{ addslashes($p->name) }}', {{ $p->cost_price ?? 0 }})">
+                                    <i data-lucide="plus" class="w-4 h-4"></i> Add
+                                </button>
+                            </div>
+                        @endforeach
+                        <div x-show="searchQuery !== '' && !hasMatches()" class="text-center py-8 text-gray-500 dark:text-gray-400">
+                            No materials found matching your search.
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Cart / Selected Items --}}
+                <div class="lg:col-span-7 flex flex-col h-[500px]">
+                    <div class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl p-4 flex-1 flex flex-col">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-bold text-lg text-indigo-900 dark:text-indigo-300 flex items-center gap-2">
+                                <i data-lucide="shopping-bag" class="w-5 h-5"></i> Selected Items
+                            </h3>
+                            <span class="bg-indigo-200 text-indigo-800 dark:bg-indigo-800 dark:text-indigo-200 text-xs px-2 py-1 rounded-full font-bold" x-text="state.lines.length + ' Items'"></span>
+                        </div>
+                        
+                        <div class="flex-1 overflow-y-auto pr-2 space-y-3">
+                            <template x-for="(row, idx) in state.lines" :key="row.key">
+                                <div class="bg-white dark:bg-gray-800 border border-indigo-100 dark:border-gray-700 rounded-xl p-4 shadow-sm relative group">
+                                    {{-- Hidden inputs to submit form data properly --}}
+                                    <input type="hidden" :name="`products[${idx}][product_id]`" :value="row.product_id">
+                                    <input type="hidden" :name="`products[${idx}][total_cost]`" :value="lineTotal(row).toFixed(2)">
+                                    
+                                    <div class="flex justify-between items-start mb-3">
+                                        <h4 class="font-bold text-gray-800 dark:text-gray-100 text-lg" x-text="row.name"></h4>
+                                        <button type="button" class="text-rose-400 hover:text-rose-600 bg-rose-50 hover:bg-rose-100 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 p-1.5 rounded-lg transition-colors" @click="removeLine(idx)">
+                                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                        </button>
+                                    </div>
+                                    
+                                    <div class="flex gap-4 items-end">
+                                        <div class="flex-1">
+                                            <label class="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider mb-1 block">Quantity</label>
+                                            <input type="number" step="0.01" min="0.01" class="form-input font-bold text-lg py-2" x-model.number="row.quantity" :name="`products[${idx}][quantity]`" @input="recalc()">
+                                        </div>
+                                        <div class="flex-1">
+                                            <label class="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider mb-1 block">Unit Cost (RWF)</label>
+                                            <input type="number" step="0.01" min="0" class="form-input font-bold text-lg py-2" x-model.number="row.unit_cost" :name="`products[${idx}][unit_cost]`" @input="recalc()">
+                                        </div>
+                                        <div class="flex-1 text-right bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
+                                            <label class="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider block">Line Total</label>
+                                            <span class="font-black text-indigo-700 dark:text-indigo-400 text-lg" x-text="formatMoney(lineTotal(row))"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                            
+                            <div x-show="state.lines.length === 0" class="h-full flex flex-col items-center justify-center text-indigo-300 dark:text-indigo-700/50 text-center p-6 border-2 border-dashed border-indigo-200 dark:border-indigo-800/50 rounded-2xl">
+                                <i data-lucide="shopping-cart" class="w-16 h-16 mb-4"></i>
+                                <p class="text-lg font-medium text-indigo-800 dark:text-indigo-300">Your cart is empty.</p>
+                                <p class="text-sm">Search and click "Add" on materials from the left.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4 pt-4 border-t border-indigo-200 dark:border-indigo-800 flex justify-between items-center bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm">
+                            <span class="text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider">Subtotal</span>
+                            <span class="text-2xl font-black text-gray-900 dark:text-white">RWF <span x-text="formatMoney(subtotal)"></span></span>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
-
-        <div class="overflow-x-auto">
-            <table class="min-w-full text-sm divide-y divide-gray-200 dark:divide-gray-700">
-                <thead class="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 uppercase text-xs font-medium">
-                    <tr>
-                        <th class="px-4 py-2 text-left">Product</th>
-                        <th class="px-4 py-2 text-right">Qty</th>
-                        <th class="px-4 py-2 text-right">Unit Cost</th>
-                        <th class="px-4 py-2 text-right">Subtotal</th>
-                        <th class="px-4 py-2"></th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-800">
-                    <template x-for="(row, idx) in state.lines" :key="row.key">
-                        <tr>
-                            {{-- Product --}}
-                            <td class="px-4 py-2">
-                                <select :name="`products[${idx}][product_id]`"
-                                        x-model.number="row.product_id"
-                                        @change="onProductChange(row, $event)"
-                                        class="form-select">
-                                    <option value="">Select product</option>
-                                    @if(isset($categories) && $categories->count())
-                                        @foreach ($categories as $cat)
-                                            @if($cat->products->count())
-                                                <optgroup label="{{ $cat->name }} ({{ ucfirst(str_replace('_', ' ', $cat->kind)) }})">
-                                                    @foreach ($cat->products as $p)
-                                                        <option value="{{ $p->id }}" data-cost="{{ $p->cost_price ?? 0 }}">
-                                                            {{ $p->name }}
-                                                        </option>
-                                                    @endforeach
-                                                </optgroup>
-                                            @endif
-                                        @endforeach
-                                        {{-- Uncategorized products --}}
-                                        @php
-                                            $categorizedIds = $categories->flatMap->products->pluck('id')->toArray();
-                                            $uncategorized = $products->whereNotIn('id', $categorizedIds);
-                                        @endphp
-                                        @if($uncategorized->count())
-                                            <optgroup label="Uncategorized">
-                                                @foreach ($uncategorized as $p)
-                                                    <option value="{{ $p->id }}" data-cost="{{ $p->cost_price ?? 0 }}">
-                                                        {{ $p->name }}
-                                                    </option>
-                                                @endforeach
-                                            </optgroup>
-                                        @endif
-                                    @else
-                                        @foreach ($products as $p)
-                                            <option value="{{ $p->id }}" data-cost="{{ $p->cost_price ?? 0 }}">
-                                                {{ $p->name }}
-                                            </option>
-                                        @endforeach
-                                    @endif
-                                </select>
-                            </td>
-
-                            {{-- Qty --}}
-                            <td class="px-4 py-2 text-right">
-                                <input type="number"
-                                       step="1"
-                                       min="1"
-                                       class="form-input text-right w-20"
-                                       x-model.number="row.quantity"
-                                       :name="`products[${idx}][quantity]`"
-                                       @input="recalc()">
-                            </td>
-
-                            {{-- Unit cost --}}
-                            <td class="px-4 py-2 text-right">
-                                <input type="number"
-                                       step="0.01"
-                                       min="0"
-                                       class="form-input text-right w-28"
-                                       x-model.number="row.unit_cost"
-                                       :name="`products[${idx}][unit_cost]`"
-                                       @input="recalc()">
-                            </td>
-
-                            {{-- Line total --}}
-                            <td class="px-4 py-2 text-right font-medium">
-                                <input type="hidden"
-                                       :name="`products[${idx}][total_cost]`"
-                                       :value="lineTotal(row).toFixed(2)">
-                                <span x-text="formatMoney(lineTotal(row))"></span>
-                            </td>
-
-                            {{-- Remove --}}
-                            <td class="px-4 py-2 text-right">
-                                <button type="button"
-                                        class="btn btn-danger text-xs px-2 py-1"
-                                        @click="removeLine(idx)">
-                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                                </button>
-                            </td>
-                        </tr>
-                    </template>
-
-                    <tr x-show="!state.lines.length">
-                        <td colspan="5" class="px-4 py-6 text-center text-gray-500 dark:text-gray-400">
-                            No items yet. Add your first product.
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+        
+        <div class="flex justify-between">
+            <button @click="prevStep()" type="button" class="btn btn-secondary px-6 py-3 rounded-xl flex items-center gap-2 hover:bg-gray-200 dark:hover:bg-gray-600">
+                <i data-lucide="arrow-left" class="w-5 h-5"></i> Back
+            </button>
+            <button @click="nextStep()" type="button" class="btn btn-primary px-8 py-3 text-lg rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transition-all" :disabled="state.lines.length === 0">
+                Next: Review & Payment <i data-lucide="arrow-right" class="w-5 h-5"></i>
+            </button>
         </div>
-
-        {{-- Generic line validation help (optional) --}}
+        
         @if ($errors->has('products'))
-            <div class="px-5 py-3 text-xs text-red-600 dark:text-red-400 border-t border-red-200/60 dark:border-red-700/60 bg-red-50/40 dark:bg-red-900/10">
-                Some product lines are invalid. Please check quantities, unit costs and selected products.
+            <div class="mt-4 p-4 rounded-xl text-sm text-red-700 bg-red-100 border border-red-200">
+                Some products are missing quantities or valid costs. Please verify your selected items.
             </div>
         @endif
     </section>
 
-    {{-- Notes + Totals --}}
-    <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {{-- Notes --}}
-        <div class="md:col-span-2">
-            <x-label value="Notes (optional)" />
-            <textarea name="notes"
-                      x-model="state.notes"
-                      rows="4"
-                      class="form-textarea"
-                      placeholder="Any remarks about this purchase..."></textarea>
-            @error('notes')
-                <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
-            @enderror
-        </div>
+    {{-- STEP 3: Notes & Totals --}}
+    <section x-show="step === 3" x-transition.opacity.duration.300ms style="display: none;" class="space-y-6">
+        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm p-6 sm:p-8">
+            <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100 mb-6 border-b pb-3 dark:border-gray-700">Step 3: Review & Complete</h2>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                
+                {{-- Payment summary --}}
+                <div class="bg-gray-50 dark:bg-gray-900/50 rounded-2xl p-6 border border-gray-200 dark:border-gray-700">
+                    <h3 class="font-bold text-lg mb-4 text-gray-800 dark:text-gray-200">Payment Summary</h3>
+                    
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center pb-3 border-b border-gray-200 dark:border-gray-700">
+                            <span class="text-gray-600 dark:text-gray-400 font-medium">Subtotal</span>
+                            <span class="font-bold text-lg" x-text="formatMoney(subtotal)"></span>
+                        </div>
 
-        {{-- Totals --}}
-        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-4 space-y-3">
-            <div class="flex justify-between text-sm">
-                <span class="text-gray-600 dark:text-gray-400">Subtotal</span>
-                <span class="font-medium" x-text="formatMoney(subtotal)"></span>
-            </div>
+                        <div class="flex items-center justify-between gap-4">
+                            <div class="flex-1">
+                                <x-label value="Tax (%)" class="text-xs uppercase tracking-wider text-gray-500" />
+                                <input type="number" step="0.01" min="0" max="100" name="tax" class="form-input mt-1" x-model.number="state.tax" @input="recalc()">
+                            </div>
+                            <div class="text-right pt-5">
+                                <span class="font-medium text-gray-700 dark:text-gray-300" x-text="'+ ' + formatMoney(taxValue)"></span>
+                            </div>
+                        </div>
 
-            <div class="flex items-center justify-between gap-3 text-sm">
-                <label class="text-gray-600 dark:text-gray-400">Tax (%)</label>
-                <input type="number"
-                       step="0.01"
-                       min="0"
-                       max="100"
-                       name="tax"
-                       class="form-input text-right w-24"
-                       x-model.number="state.tax"
-                       @input="recalc()">
-            </div>
-            <div class="flex justify-between text-sm">
-                <span class="text-gray-600 dark:text-gray-400">Tax Value</span>
-                <span x-text="formatMoney(taxValue)"></span>
-            </div>
+                        <div class="flex items-center justify-between gap-4">
+                            <div class="flex-1">
+                                <x-label value="Discount (%)" class="text-xs uppercase tracking-wider text-gray-500" />
+                                <input type="number" step="0.01" min="0" max="100" name="discount" class="form-input mt-1" x-model.number="state.discount" @input="recalc()">
+                            </div>
+                            <div class="text-right pt-5">
+                                <span class="font-medium text-amber-600 dark:text-amber-400" x-text="'- ' + formatMoney(discountValue)"></span>
+                            </div>
+                        </div>
 
-            <div class="flex items-center justify-between gap-3 text-sm">
-                <label class="text-gray-600 dark:text-gray-400">Discount (%)</label>
-                <input type="number"
-                       step="0.01"
-                       min="0"
-                       max="100"
-                       name="discount"
-                       class="form-input text-right w-24"
-                       x-model.number="state.discount"
-                       @input="recalc()">
-            </div>
-            <div class="flex justify-between text-sm">
-                <span class="text-gray-600 dark:text-gray-400">Discount Value</span>
-                <span x-text="formatMoney(discountValue)"></span>
-            </div>
+                        <div class="flex justify-between items-center pt-4 border-t-2 border-gray-200 dark:border-gray-700 mt-2">
+                            <span class="text-xl font-black uppercase text-gray-800 dark:text-white">Total</span>
+                            <span class="text-2xl font-black text-indigo-700 dark:text-indigo-400" x-text="'RWF ' + formatMoney(grand)"></span>
+                        </div>
 
-            <div class="flex justify-between font-semibold border-t pt-2">
-                <span>Total</span>
-                <span x-text="formatMoney(grand)"></span>
-            </div>
+                        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 mt-6 border border-gray-200 dark:border-gray-700 shadow-sm">
+                            <x-label value="Amount Paid Now" class="font-bold text-gray-800 dark:text-gray-200 mb-2" />
+                            <div class="flex items-center gap-3">
+                                <input type="number" step="0.01" min="0" id="amount_paid" name="amount_paid" class="form-input text-xl font-bold py-3 text-emerald-700 dark:text-emerald-400" x-model.number="state.amount_paid" @input="recalc()">
+                                <button type="button" class="btn btn-success whitespace-nowrap px-4 py-3" @click="payFull()">
+                                    Pay Full
+                                </button>
+                            </div>
+                            
+                            <div class="flex justify-between items-center mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
+                                <span class="font-bold text-gray-600 dark:text-gray-400">Balance to Supplier</span>
+                                <span class="text-xl font-bold" :class="balance > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-gray-500 dark:text-gray-400'" x-text="'RWF ' + formatMoney(balance)"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-            <div class="flex items-center justify-between gap-3 text-sm">
-                <label for="amount_paid" class="font-medium">Amount Paid</label>
-                <div class="flex items-center gap-2">
-                    <input type="number"
-                           step="0.01"
-                           min="0"
-                           id="amount_paid"
-                           name="amount_paid"
-                           class="form-input text-right w-32"
-                           x-model.number="state.amount_paid"
-                           @input="recalc()">
-                    <button type="button"
-                            class="btn btn-outline text-xs px-2 py-1"
-                            @click="payFull()">
-                        Full
-                    </button>
+                {{-- Extras (Document & Notes) --}}
+                <div class="space-y-6">
+                    <div class="bg-gray-50 dark:bg-gray-900/50 rounded-2xl p-6 border border-gray-200 dark:border-gray-700">
+                        <div class="flex items-center gap-2 mb-4">
+                            <i data-lucide="paperclip" class="w-5 h-5 text-indigo-500"></i>
+                            <h3 class="font-bold text-lg text-gray-800 dark:text-gray-200">Supporting Document</h3>
+                        </div>
+                        <input type="file" name="document" class="form-input p-2 bg-white dark:bg-gray-800" accept=".jpg,.jpeg,.png,.pdf,.doc,.docx">
+                        <p class="text-xs text-gray-500 mt-2">Upload invoice or receipt (Images, PDF, Word - Max 5MB)</p>
+                        @error('document')
+                            <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
+                        @enderror
+                        @if($isEdit && !empty($purchase->document_path))
+                            <div class="mt-3 p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg text-sm text-gray-700 dark:text-gray-300 flex items-center justify-between">
+                                <span class="flex items-center gap-2"><i data-lucide="file-check" class="w-4 h-4 text-indigo-600"></i> Document Attached</span>
+                                <a href="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($purchase->document_path) }}" target="_blank" class="text-indigo-600 font-bold hover:underline">View</a>
+                            </div>
+                        @endif
+                    </div>
+
+                    <div class="bg-gray-50 dark:bg-gray-900/50 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 flex-1">
+                        <div class="flex items-center gap-2 mb-4">
+                            <i data-lucide="sticky-note" class="w-5 h-5 text-indigo-500"></i>
+                            <h3 class="font-bold text-lg text-gray-800 dark:text-gray-200">Notes (Optional)</h3>
+                        </div>
+                        <textarea name="notes" x-model="state.notes" rows="4" class="form-textarea w-full rounded-xl" placeholder="Any remarks about this purchase..."></textarea>
+                        @error('notes')
+                            <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
+                        @enderror
+                    </div>
                 </div>
             </div>
+        </div>
 
-            <div class="flex justify-between font-semibold border-t pt-2">
-                <span>Balance Due</span>
-                <span x-text="formatMoney(balance)"></span>
-            </div>
+        <div class="flex justify-between">
+            <button @click="prevStep()" type="button" class="btn btn-secondary px-6 py-3 rounded-xl flex items-center gap-2 hover:bg-gray-200 dark:hover:bg-gray-600">
+                <i data-lucide="arrow-left" class="w-5 h-5"></i> Back
+            </button>
+            <button type="submit" class="btn btn-success px-8 py-3 text-xl font-bold rounded-xl flex items-center gap-2 shadow-xl hover:shadow-2xl transition-all hover:scale-105">
+                <i data-lucide="check-circle" class="w-6 h-6"></i>
+                {{ $isEdit ? 'Update Purchase' : 'Confirm & Save Purchase' }}
+            </button>
         </div>
     </section>
-
-    {{-- Actions --}}
-    <div class="pt-2 flex flex-col sm:flex-row gap-2">
-        <button type="submit"
-                class="btn btn-success flex-1 flex items-center justify-center gap-1">
-            <i data-lucide="save" class="w-4 h-4"></i>
-            {{ $isEdit ? 'Update Purchase' : 'Save Purchase' }}
-        </button>
-
-        <a href="{{ $isEdit ? route('purchases.show', $purchase) : route('purchases.index') }}"
-           class="btn btn-outline flex-1 flex items-center justify-center gap-1">
-            <i data-lucide="x" class="w-4 h-4"></i>
-            Cancel
-        </a>
-    </div>
 </div>
 
 @push('scripts')
@@ -355,6 +345,9 @@ function purchaseForm(initial){
         }));
 
     return {
+        step: 1,
+        searchQuery: '',
+        
         state: {
             supplier_id:     initial.supplier_id     ?? '',
             purchase_date:   initial.purchase_date   ?? '',
@@ -366,7 +359,7 @@ function purchaseForm(initial){
             amount_paid:     Number(initial.amount_paid || 0),
             lines:           withKeys(Array.isArray(initial.lines) && initial.lines.length
                                 ? initial.lines
-                                : [{ product_id:'', quantity:1, unit_cost:0 }]),
+                                : []), // Empty cart by default now
         },
 
         subtotal: 0,
@@ -377,40 +370,52 @@ function purchaseForm(initial){
 
         init() {
             this.recalc();
+            // If editing and has items, maybe jump to review or just start at 1
+        },
+        
+        nextStep() {
+            if (this.step === 1 && !this.state.supplier_id) return;
+            if (this.step === 2 && this.state.lines.length === 0) return;
+            if (this.step < 3) this.step++;
+        },
+        
+        prevStep() {
+            if (this.step > 1) this.step--;
         },
 
         setChannel(c) {
             this.state.payment_channel = c;
         },
 
-
-
-        addLine() {
-            this.state.lines.push({
-                key: (crypto?.randomUUID?.() || (Date.now() + Math.random())),
-                product_id: '',
-                quantity: 1,
-                unit_cost: 0,
-            });
-            this.recalc();
+        matchesSearch(name) {
+            if (this.searchQuery === '') return true;
+            return name.toLowerCase().includes(this.searchQuery.toLowerCase());
+        },
+        
+        hasMatches() {
+            // A simple DOM check is easiest for Alpine lists
+            return document.querySelectorAll(`[x-show="matchesSearch('...' )]`).length > 0;
         },
 
-        clearLines() {
-            this.state.lines = [];
+        addToCart(id, name, cost) {
+            // check if already exists
+            const existing = this.state.lines.find(l => l.product_id === id);
+            if(existing) {
+                existing.quantity++;
+            } else {
+                this.state.lines.push({
+                    key: (crypto?.randomUUID?.() || (Date.now() + Math.random())),
+                    product_id: id,
+                    name: name,
+                    quantity: 1,
+                    unit_cost: cost,
+                });
+            }
             this.recalc();
         },
 
         removeLine(i) {
             this.state.lines.splice(i, 1);
-            this.recalc();
-        },
-
-        onProductChange(row, e) {
-            const opt  = e.target.options[e.target.selectedIndex];
-            const cost = Number(opt?.dataset?.cost || 0);
-            if (cost > 0 && (!row.unit_cost || row.unit_cost === 0)) {
-                row.unit_cost = cost;
-            }
             this.recalc();
         },
 

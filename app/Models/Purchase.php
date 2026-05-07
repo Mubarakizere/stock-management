@@ -29,6 +29,7 @@ class Purchase extends Model
         'notes',
         'payment_channel',
         'method',
+        'document_path',
     ];
 
     /* ───────────── Casts ───────────── */

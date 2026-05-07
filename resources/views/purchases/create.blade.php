@@ -17,7 +17,7 @@
         </div>
 
         {{-- Form --}}
-        <form action="{{ route('purchases.store') }}" method="POST" class="space-y-6">
+        <form action="{{ route('purchases.store') }}" method="POST" enctype="multipart/form-data" class="space-y-6">
             @csrf
             @include('purchases._form', [
                 'suppliers' => $suppliers,
