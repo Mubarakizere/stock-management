@@ -57,9 +57,17 @@
             </thead>
             <tbody>
                 @foreach($sale->items as $item)
+                    @if(isset($item->type) && $item->type === 'damaged')
+                        @continue
+                    @endif
                     <tr>
                         <td>
-                            <div class="font-bold">{{ $item->product->name ?? 'Unknown Item' }}</div>
+                            <div class="font-bold">
+                                {{ $item->product->name ?? 'Unknown Item' }}
+                                @if(isset($item->type) && in_array($item->type, ['sampler', 'test', 'replacement']))
+                                    <span style="font-weight: normal; font-size: 10px; color: #6b7280; margin-left: 4px;">({{ ucfirst($item->type) }})</span>
+                                @endif
+                            </div>
                         </td>
                         <td class="num">{{ number_format($item->quantity) }}</td>
                         <td class="num">{{ number_format($item->unit_price, 2) }}</td>

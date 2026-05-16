@@ -473,7 +473,23 @@
                 <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                     @forelse($sale->items as $item)
                         <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/40 transition">
-                            <td class="px-4 py-2 text-gray-700 dark:text-gray-300">{{ $item->product->name ?? 'Unknown Product' }}</td>
+                            <td class="px-4 py-2 text-gray-700 dark:text-gray-300">
+                                {{ $item->product->name ?? 'Unknown Product' }}
+                                @if(isset($item->type) && $item->type !== 'sale')
+                                    @php
+                                        $typeColors = [
+                                            'sampler' => 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+                                            'test' => 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
+                                            'damaged' => 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+                                            'replacement' => 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+                                        ];
+                                        $typeColor = $typeColors[$item->type] ?? 'bg-gray-100 text-gray-700';
+                                    @endphp
+                                    <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium {{ $typeColor }}">
+                                        {{ ucfirst($item->type) }}
+                                    </span>
+                                @endif
+                            </td>
                             <td class="px-4 py-2 text-center text-gray-700 dark:text-gray-300">{{ number_format($item->quantity, 2) }}</td>
                             <td class="px-4 py-2 text-right text-gray-700 dark:text-gray-300">{{ number_format($item->unit_price, 2) }}</td>
                             <td class="px-4 py-2 text-right text-gray-700 dark:text-gray-300">{{ number_format($item->subtotal, 2) }}</td>

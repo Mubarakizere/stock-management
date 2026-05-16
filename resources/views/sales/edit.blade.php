@@ -49,6 +49,7 @@
             $initialLines = collect($oldProducts)->map(fn($p) => [
                 'key' => uniqid(),
                 'product_id' => (int) ($p['product_id'] ?? 0),
+                'type' => $p['type'] ?? 'sale',
                 'quantity' => (float) ($p['quantity'] ?? 1),
                 'unit_price' => (float) ($p['unit_price'] ?? 0),
             ])->values();
@@ -56,12 +57,13 @@
             $initialLines = $sale->items->map(fn($item) => [
                 'key' => uniqid(),
                 'product_id' => (int) $item->product_id,
+                'type' => $item->type ?? 'sale',
                 'quantity' => (float) $item->quantity,
                 'unit_price' => (float) $item->unit_price,
             ])->values();
         }
         if ($initialLines->isEmpty()) {
-            $initialLines = [['key' => uniqid(), 'product_id' => '', 'quantity' => 1, 'unit_price' => 0]];
+            $initialLines = [['key' => uniqid(), 'product_id' => '', 'type' => 'sale', 'quantity' => 1, 'unit_price' => 0]];
         }
 
         // 3. Prepare Initial Payments
@@ -194,6 +196,7 @@
                     <thead class="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 uppercase text-xs font-medium">
                         <tr>
                             <th class="px-4 py-2 text-left">Product</th>
+                            <th class="px-4 py-2 text-left">Type</th>
                             <th class="px-4 py-2 text-right">Qty</th>
                             <th class="px-4 py-2 text-right">Unit Price</th>
                             <th class="px-4 py-2 text-right">Subtotal</th>
@@ -225,6 +228,19 @@
                                     </div>
                                 </td>
 
+                                <td class="px-4 py-2">
+                                    <select :name="`products[${idx}][type]`"
+                                            x-model="row.type"
+                                            @change="onTypeChange(row)"
+                                            class="w-32 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-100 text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                        <option value="sale">Sale</option>
+                                        <option value="sampler">Sampler</option>
+                                        <option value="test">Test</option>
+                                        <option value="damaged">Damaged</option>
+                                        <option value="replacement">Replacement</option>
+                                    </select>
+                                </td>
+
                                 <td class="px-4 py-2 text-right">
                                     <input type="number" step="0.01" min="0.01"
                                            class="w-20 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-100 text-right text-sm"
@@ -235,9 +251,10 @@
 
                                 <td class="px-4 py-2 text-right">
                                     <input type="number" step="0.01" min="0"
-                                           class="w-28 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-100 text-right text-sm"
+                                           class="w-28 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-100 text-right text-sm disabled:opacity-50"
                                            x-model.number="row.unit_price"
                                            :name="`products[${idx}][unit_price]`"
+                                           :readonly="row.type !== 'sale'"
                                            @input="recalc()">
                                 </td>
 
@@ -255,7 +272,7 @@
                         </template>
 
                         <tr x-show="!lines.length">
-                            <td colspan="5" class="px-4 py-6 text-center text-gray-500 dark:text-gray-400">No items yet. Add your first product.</td>
+                            <td colspan="6" class="px-4 py-6 text-center text-gray-500 dark:text-gray-400">No items yet. Add your first product.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -408,14 +425,23 @@ function saleEditForm(config){
         },
 
         // Actions
-        addLine(){ this.lines.push({ key: rid(), product_id:'', quantity:1, unit_price:0 }); },
+        addLine(){ this.lines.push({ key: rid(), product_id:'', type: 'sale', quantity:1, unit_price:0 }); },
         clearLines(){ this.lines = []; this.recalc(); },
         removeLine(i){ this.lines.splice(i,1); this.recalc(); },
 
         onProductChange(row){
             const p = this.productMap[row.product_id];
-            if (p && (!row.unit_price || row.unit_price === 0)) {
+            if (p && (!row.unit_price || row.unit_price === 0) && row.type === 'sale') {
                 row.unit_price = p.price;
+            }
+            this.recalc();
+        },
+
+        onTypeChange(row){
+            if (row.type !== 'sale') {
+                row.unit_price = 0;
+            } else {
+                row.unit_price = this.prodDefaultPrice(row);
             }
             this.recalc();
         },

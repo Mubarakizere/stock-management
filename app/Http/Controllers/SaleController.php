@@ -57,6 +57,7 @@ class SaleController extends Controller
             'products.*.product_id' => 'required|exists:products,id',
             'products.*.quantity'   => 'required|numeric|min:0.01',
             'products.*.unit_price' => 'required|numeric|min:0',
+            'products.*.type'       => 'nullable|string|in:sale,sampler,test,damaged,replacement',
 
             // Legacy single-payment fallback
             'amount_paid'           => 'nullable|numeric|min:0',
@@ -143,8 +144,9 @@ class SaleController extends Controller
             foreach ($request->products as $item) {
                 $product = Product::findOrFail($item['product_id']);
 
+                $type      = $item['type'] ?? 'sale';
                 $qty       = (float) $item['quantity'];
-                $unitPrice = (float) $item['unit_price'];
+                $unitPrice = $type === 'sale' ? (float) $item['unit_price'] : 0.0;
                 $subtotal  = round($qty * $unitPrice, 2);
                 $cost      = (float) ($product->cost_price ?? 0);
                 $profit    = round(($unitPrice - $cost) * $qty, 2);
@@ -152,6 +154,7 @@ class SaleController extends Controller
                 SaleItem::create([
                     'sale_id'    => $sale->id,
                     'product_id' => $product->id,
+                    'type'       => $type,
                     'quantity'   => $qty,
                     'unit_price' => $unitPrice,
                     'subtotal'   => $subtotal,
@@ -302,6 +305,7 @@ class SaleController extends Controller
             'products.*.product_id' => 'required|exists:products,id',
             'products.*.quantity'   => 'required|numeric|min:0.01',
             'products.*.unit_price' => 'required|numeric|min:0',
+            'products.*.type'       => 'nullable|string|in:sale,sampler,test,damaged,replacement',
 
             'amount_paid'           => 'nullable|numeric|min:0',
             'payment_channel'       => 'nullable|string',
@@ -361,8 +365,9 @@ class SaleController extends Controller
             foreach ($products as $item) {
                 $product = Product::findOrFail($item['product_id']);
 
+                $type      = $item['type'] ?? 'sale';
                 $qty       = (float) $item['quantity'];
-                $unitPrice = (float) $item['unit_price'];
+                $unitPrice = $type === 'sale' ? (float) $item['unit_price'] : 0.0;
                 $subtotal  = round($qty * $unitPrice, 2);
                 $cost      = (float) ($product->cost_price ?? 0);
                 $profit    = round(($unitPrice - $cost) * $qty, 2);
@@ -370,6 +375,7 @@ class SaleController extends Controller
                 SaleItem::create([
                     'sale_id'    => $sale->id,
                     'product_id' => $product->id,
+                    'type'       => $type,
                     'quantity'   => $qty,
                     'unit_price' => $unitPrice,
                     'subtotal'   => $subtotal,

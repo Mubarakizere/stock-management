@@ -186,6 +186,7 @@
                     <thead class="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 uppercase text-xs font-medium">
                         <tr>
                             <th class="px-4 py-2 text-left">Product</th>
+                            <th class="px-4 py-2 text-left">Type</th>
                             <th class="px-4 py-2 text-right">Qty</th>
                             <th class="px-4 py-2 text-right">Unit Price</th>
                             <th class="px-4 py-2 text-right">Subtotal</th>
@@ -216,6 +217,19 @@
                                     </div>
                                 </td>
 
+                                <td class="px-4 py-2">
+                                    <select :name="`products[${idx}][type]`"
+                                            x-model="row.type"
+                                            @change="onTypeChange(row)"
+                                            class="w-32 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-100 text-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                        <option value="sale">Sale</option>
+                                        <option value="sampler">Sampler</option>
+                                        <option value="test">Test</option>
+                                        <option value="damaged">Damaged</option>
+                                        <option value="replacement">Replacement</option>
+                                    </select>
+                                </td>
+
                                 <td class="px-4 py-2 text-right">
                                     <input type="number" step="0.01" min="0.01"
                                            class="w-20 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-100 text-right text-sm"
@@ -226,9 +240,10 @@
 
                                 <td class="px-4 py-2 text-right">
                                     <input type="number" step="0.01" min="0"
-                                           class="w-28 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-100 text-right text-sm"
+                                           class="w-28 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900/50 dark:text-gray-100 text-right text-sm disabled:opacity-50"
                                            x-model.number="row.unit_price"
                                            :name="`products[${idx}][unit_price]`"
+                                           :readonly="row.type !== 'sale'"
                                            @input="recalc()">
                                     <div class="text-[11px] text-gray-400 mt-1">
                                         <button type="button" class="underline" @click="resetToDefaultPrice(row)">use default</button>
@@ -249,7 +264,7 @@
                         </template>
 
                         <tr x-show="!lines.length">
-                            <td colspan="5" class="px-4 py-6 text-center text-gray-500 dark:text-gray-400">
+                            <td colspan="6" class="px-4 py-6 text-center text-gray-500 dark:text-gray-400">
                                 No items yet. Add your first product.
                             </td>
                         </tr>
@@ -400,11 +415,12 @@ function saleCreateForm(productMeta){
         lines: (() => {
             const raw = @json(old('products', []));
             if (!Array.isArray(raw) || raw.length === 0) {
-                return [{ key: rid(), product_id: '', quantity: 1, unit_price: 0 }];
+                return [{ key: rid(), product_id: '', type: 'sale', quantity: 1, unit_price: 0 }];
             }
             return raw.map(p => ({
                 key: rid(),
                 product_id: Number(p?.product_id ?? 0) || '',
+                type: p?.type || 'sale',
                 quantity:   Number(p?.quantity ?? 1) || 1,
                 unit_price: Number(p?.unit_price ?? 0) || 0,
             }));
@@ -484,7 +500,7 @@ function saleCreateForm(productMeta){
         },
 
         addLine(){
-            this.lines.push({ key: rid(), product_id: '', quantity: 1, unit_price: 0 });
+            this.lines.push({ key: rid(), product_id: '', type: 'sale', quantity: 1, unit_price: 0 });
         },
         clearLines(){
             this.lines = [];
@@ -497,8 +513,17 @@ function saleCreateForm(productMeta){
 
         onProductChange(row){
             const defPrice = this.prodDefaultPrice(row);
-            if (defPrice > 0 && (!row.unit_price || row.unit_price === 0)) {
+            if (defPrice > 0 && (!row.unit_price || row.unit_price === 0) && row.type === 'sale') {
                 row.unit_price = defPrice;
+            }
+            this.recalc();
+        },
+
+        onTypeChange(row){
+            if (row.type !== 'sale') {
+                row.unit_price = 0;
+            } else {
+                row.unit_price = this.prodDefaultPrice(row);
             }
             this.recalc();
         },
