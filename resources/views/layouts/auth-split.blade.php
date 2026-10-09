@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="h-full bg-white">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="h-full bg-white dark:bg-gray-900">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <title>{{ config('app.name', 'NezerwaPlus') }}</title>
+    <title>{{ config('app.name', 'Nezerwa Plus') }}</title>
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,27 +23,51 @@
     <x-loader />
     <div class="min-h-full flex">
 
-        <!-- Left Side: Branding & Visuals -->
-        <!-- Left Side: Branding & Visuals -->
-        <div class="hidden lg:flex flex-1 relative bg-emerald-900 text-white overflow-hidden" style="background-color: #064e3b;">
-            <div class="absolute inset-0 bg-gradient-to-br from-emerald-600 to-emerald-900 opacity-90" style="background: linear-gradient(to bottom right, #059669, #064e3b);"></div>
-            
+        <!-- Left Side: Solid Dark Branding Panel -->
+        <div class="hidden lg:flex flex-1 relative bg-gray-900 border-r border-gray-800 text-white overflow-hidden">
+            <!-- Subtle architectural dot pattern -->
+            <div class="absolute inset-0 bg-[radial-gradient(#1f2937_1px,transparent_1px)] [background-size:24px_24px] opacity-40 pointer-events-none"></div>
+
             <div class="relative z-10 flex flex-col justify-center items-center h-full p-12 w-full text-center">
-                <div class="mb-8">
-                    <div class="bg-white/10 p-4 rounded-2xl backdrop-blur-sm inline-block">
-                        <svg class="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                        </svg>
+                <!-- App Icon Mark -->
+                <div class="w-14 h-14 rounded-2xl bg-teal-500/10 border border-teal-500/20 text-teal-400 flex items-center justify-center mb-6 shadow-sm">
+                    <i data-lucide="boxes" class="w-7 h-7"></i>
+                </div>
+
+                <h1 class="text-3xl sm:text-4xl font-bold tracking-tight text-white mb-2.5">
+                    Nezerwa Plus
+                </h1>
+                <p class="text-gray-400 text-sm max-w-sm mx-auto leading-relaxed mb-8">
+                    Modern inventory management, automated valuation, and multi-channel commerce.
+                </p>
+
+                <!-- Value Highlights -->
+                <div class="w-full max-w-sm space-y-2.5 text-left">
+                    <div class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-gray-800/40 border border-gray-800/80 text-xs text-gray-300">
+                        <span class="w-7 h-7 rounded-lg bg-teal-500/10 border border-teal-500/20 text-teal-400 flex items-center justify-center shrink-0">
+                            <i data-lucide="package" class="w-3.5 h-3.5"></i>
+                        </span>
+                        <span>Real-time stock valuation & low-stock alerts</span>
+                    </div>
+
+                    <div class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-gray-800/40 border border-gray-800/80 text-xs text-gray-300">
+                        <span class="w-7 h-7 rounded-lg bg-teal-500/10 border border-teal-500/20 text-teal-400 flex items-center justify-center shrink-0">
+                            <i data-lucide="flask-conical" class="w-3.5 h-3.5"></i>
+                        </span>
+                        <span>Raw materials, recipes & production tracking</span>
+                    </div>
+
+                    <div class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-gray-800/40 border border-gray-800/80 text-xs text-gray-300">
+                        <span class="w-7 h-7 rounded-lg bg-teal-500/10 border border-teal-500/20 text-teal-400 flex items-center justify-center shrink-0">
+                            <i data-lucide="activity" class="w-3.5 h-3.5"></i>
+                        </span>
+                        <span>Multi-channel transactions & supplier ledger</span>
                     </div>
                 </div>
-                <h1 class="text-4xl font-bold tracking-tight text-white mb-4">Nezerwa Plus</h1>
-                <p class="text-emerald-100 text-lg max-w-md mx-auto">
-                    The premium solution for modern commerce.
-                </p>
             </div>
-            
-            <div class="absolute bottom-6 left-0 right-0 text-center text-emerald-200/60 text-xs">
-                &copy; {{ date('Y') }} NezerwaPlus. All rights reserved.
+
+            <div class="absolute bottom-6 left-0 right-0 text-center text-gray-400 dark:text-gray-500 text-xs">
+                &copy; {{ date('Y') }} Nezerwa Plus. All rights reserved.
             </div>
         </div>
 
@@ -55,5 +79,14 @@
         </div>
 
     </div>
+
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.lucide && typeof window.lucide.createIcons === 'function') {
+                window.lucide.createIcons();
+            }
+        });
+    </script>
 </body>
 </html>
