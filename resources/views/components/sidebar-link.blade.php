@@ -2,8 +2,8 @@
 
 @php
 $classes = $active
-    ? 'block px-3 py-2 rounded-md bg-white/20 text-white font-medium'
-    : 'block px-3 py-2 rounded-md text-white/80 hover:bg-white/10';
+    ? 'flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold bg-teal-500/10 text-teal-400 transition-colors shadow-xs'
+    : 'flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium text-gray-400 hover:text-gray-200 hover:bg-gray-800/60 transition-colors';
 @endphp
 
 <a href="{{ $href }}" {{ $attributes->merge(['class' => $classes]) }}>

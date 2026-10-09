@@ -13,7 +13,7 @@
 
     $allCategories    = $categories ?? Category::where('kind','raw_material')->orderBy('name')->get();
     $usableCategories = collect($allCategories)
-        ->filter(fn($c) => ($c->is_active ?? true) && in_array($c->kind ?? 'raw_material', ['raw_material','both']))
+        ->filter(fn($c) => ($c->is_active ?? true) && ($c->kind ?? '') === 'raw_material')
         ->values();
 
     $__coll = $products instanceof \Illuminate\Contracts\Pagination\LengthAwarePaginator
@@ -271,15 +271,15 @@
 
                                         @can('products.delete')
                                             <div class="py-1">
-                                                <form action="{{ route('raw-materials.destroy', $p) }}" method="POST">
-                                                    @csrf
-                                                    @method('DELETE')
-                                                    <button type="submit" onclick="return confirm('Delete this raw material?')"
-                                                        class="group flex w-full items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-rose-50 dark:hover:bg-rose-900/20">
-                                                        <i data-lucide="trash-2" class="mr-3 h-4 w-4 text-gray-400 group-hover:text-rose-600"></i>
-                                                        <span class="group-hover:text-rose-600">Delete</span>
-                                                    </button>
-                                                </form>
+                                                <button type="button"
+                                                    @click="open = false; $dispatch('open-delete-raw-material-modal', {
+                                                        url: '{{ route('raw-materials.destroy', $p) }}',
+                                                        name: '{{ addslashes($p->name) }}'
+                                                    })"
+                                                    class="group flex w-full items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition">
+                                                    <i data-lucide="trash-2" class="mr-3 h-4 w-4 text-gray-400 group-hover:text-rose-600"></i>
+                                                    <span class="group-hover:text-rose-600">Delete</span>
+                                                </button>
                                             </div>
                                         @endcan
                                     </div>
@@ -305,6 +305,84 @@
 
     @endcannot
 </div>
+
+{{-- Delete Confirmation Modal --}}
+@can('products.delete')
+<div x-data="{
+        open: false,
+        deleteUrl: '',
+        rawMaterialName: '',
+        openModal(detail) {
+            this.deleteUrl = detail.url || '';
+            this.rawMaterialName = detail.name || 'this raw material';
+            this.open = true;
+            this.$nextTick(() => {
+                if (window.lucide && typeof window.lucide.createIcons === 'function') {
+                    window.lucide.createIcons();
+                }
+            });
+        },
+        closeModal() {
+            this.open = false;
+            this.deleteUrl = '';
+            this.rawMaterialName = '';
+        }
+    }"
+    @open-delete-raw-material-modal.window="openModal($event.detail)"
+    @keydown.escape.window="closeModal()"
+    x-show="open"
+    x-cloak
+    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+    x-transition:enter="transition ease-out duration-200"
+    x-transition:enter-start="opacity-0"
+    x-transition:enter-end="opacity-100"
+    x-transition:leave="transition ease-in duration-150"
+    x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0">
+
+    <div @click.outside="closeModal()"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 scale-95"
+         x-transition:enter-end="opacity-100 scale-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100 scale-100"
+         x-transition:leave-end="opacity-0 scale-95"
+         class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-gray-200 dark:border-gray-700">
+
+        <div class="flex items-start gap-4">
+            <div class="w-11 h-11 rounded-xl bg-rose-100 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 shadow-sm">
+                <i data-lucide="trash-2" class="w-5 h-5"></i>
+            </div>
+            <div class="space-y-1.5 flex-1">
+                <h3 class="text-base font-bold text-gray-900 dark:text-gray-100">
+                    Delete Raw Material
+                </h3>
+                <p class="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                    Are you sure you want to delete <span class="font-semibold text-gray-900 dark:text-gray-100" x-text="rawMaterialName"></span>? This raw material will be removed from your catalog.
+                </p>
+                <p class="text-xs text-rose-600 dark:text-rose-400">
+                    This action cannot be undone.
+                </p>
+            </div>
+        </div>
+
+        <form :action="deleteUrl" method="POST" class="mt-6 flex items-center justify-end gap-3 pt-3 border-t border-gray-100 dark:border-gray-700/80">
+            @csrf
+            @method('DELETE')
+            <button type="button"
+                    @click="closeModal()"
+                    class="px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/60 text-sm font-medium transition shadow-sm">
+                Cancel
+            </button>
+            <button type="submit"
+                    class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white text-sm font-semibold transition shadow-sm">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                <span>Delete</span>
+            </button>
+        </form>
+    </div>
+</div>
+@endcan
 
 @push('scripts')
 <script src="https://unpkg.com/lucide@latest"></script>
