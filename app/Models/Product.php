@@ -22,6 +22,7 @@ class Product extends Model
         'price',
         'cost_price',
         'stock',
+        'unit',
     ];
 
     /** Cast numeric money fields for consistency */
@@ -139,7 +140,14 @@ class Product extends Model
     /** Human-friendly stock display */
     public function getFormattedStockAttribute(): string
     {
-        return number_format($this->currentStock(), 0);
+        return number_format($this->currentStock(), 2);
+    }
+
+    /** Stock display with unit symbol */
+    public function getFormattedStockWithUnitAttribute(): string
+    {
+        $unit = $this->unit ?? 'pcs';
+        return number_format($this->currentStock(), 2) . ' ' . $unit;
     }
 
     /** Low-stock flag, configurable via config('inventory.low_stock', 5) */

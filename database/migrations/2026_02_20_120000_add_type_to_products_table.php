@@ -32,8 +32,14 @@ return new class extends Migration
                 WHERE p.category_id = c.id
                   AND c.kind = 'raw_material'
             ");
+        } elseif (DB::getDriverName() === 'sqlite') {
+            DB::statement("
+                UPDATE products
+                SET type = 'raw_material'
+                WHERE category_id IN (SELECT id FROM categories WHERE kind = 'raw_material')
+            ");
         } else {
-            // MySQL / MariaDB / SQLite compatible
+            // MySQL / MariaDB
             DB::statement("
                 UPDATE products p
                 JOIN categories c ON p.category_id = c.id

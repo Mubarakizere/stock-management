@@ -40,9 +40,16 @@ class ProductionController extends Controller
         $productions = $query->paginate($perPage)->appends($request->query());
 
         // Products for filter dropdown
-        $products = Product::products()->orderBy('name')->get(['id', 'name']);
+        $products = Product::products()->orderBy('name')->get(['id', 'name', 'unit']);
 
-        return view('productions.index', compact('productions', 'products'));
+        // KPI statistics for production dashboard
+        $stats = [
+            'total_runs'     => Production::count(),
+            'total_produced' => (float) Production::sum('quantity'),
+            'active_recipes' => Product::products()->has('recipeItems')->count(),
+        ];
+
+        return view('productions.index', compact('productions', 'products', 'stats'));
     }
 
     /** Show the create production form */
@@ -79,13 +86,14 @@ class ProductionController extends Controller
 
         $qty = (float) $request->input('quantity');
 
-        // Check raw material availability
+        // Check raw material availability in base stock units
         $shortages = [];
         foreach ($product->recipeItems as $ri) {
-            $needed   = $ri->quantity * $qty;
-            $available = $ri->rawMaterial->currentStock();
-            if ($available < $needed) {
-                $shortages[] = "{$ri->rawMaterial->name}: need " . number_format($needed, 2) . ", have " . number_format($available, 2);
+            $neededBase = $ri->baseQuantityNeeded($qty);
+            $available  = $ri->rawMaterial->currentStock();
+            $rmUnit     = $ri->rawMaterial->unit ?: 'pcs';
+            if ($available < $neededBase) {
+                $shortages[] = "{$ri->rawMaterial->name}: need " . number_format($neededBase, 2) . " {$rmUnit}, have " . number_format($available, 2) . " {$rmUnit}";
             }
         }
 
@@ -110,29 +118,34 @@ class ProductionController extends Controller
 
             // Deduct raw materials and record stock movements
             foreach ($product->recipeItems as $ri) {
-                $totalUsed = $ri->quantity * $qty;
+                $totalRecipeQty = $ri->quantity * $qty;
+                $totalBaseQty   = $ri->baseQuantityNeeded($qty);
+                $rmUnit         = $ri->rawMaterial->unit ?: 'pcs';
+                $recipeUnit     = $ri->unit ?: $rmUnit;
 
                 ProductionMaterial::create([
-                    'production_id'    => $production->id,
-                    'raw_material_id'  => $ri->raw_material_id,
-                    'quantity_per_unit' => $ri->quantity,
-                    'quantity_used'    => $totalUsed,
+                    'production_id'      => $production->id,
+                    'raw_material_id'    => $ri->raw_material_id,
+                    'quantity_per_unit'  => $ri->quantity,
+                    'quantity_used'      => $totalRecipeQty,
+                    'unit'               => $recipeUnit,
+                    'base_quantity_used' => $totalBaseQty,
                 ]);
 
-                // Stock out for raw material
+                // Stock out for raw material (in base stock unit)
                 StockMovement::create([
                     'product_id'  => $ri->raw_material_id,
                     'type'        => 'out',
-                    'quantity'    => $totalUsed,
+                    'quantity'    => $totalBaseQty,
                     'unit_cost'   => $ri->rawMaterial->price ?? 0,
-                    'total_cost'  => ($ri->rawMaterial->price ?? 0) * $totalUsed,
+                    'total_cost'  => ($ri->rawMaterial->price ?? 0) * $totalBaseQty,
                     'source_type' => Production::class,
                     'source_id'   => $production->id,
                     'user_id'     => Auth::id(),
                 ]);
 
                 // Update the raw material stock field
-                $ri->rawMaterial->decrement('stock', $totalUsed);
+                $ri->rawMaterial->decrement('stock', $totalBaseQty);
             }
 
             // Stock in for finished product

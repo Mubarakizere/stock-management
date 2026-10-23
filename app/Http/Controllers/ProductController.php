@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
+use App\Services\UnitService;
 
 class ProductController extends Controller
 {
@@ -98,8 +99,9 @@ class ProductController extends Controller
     /** Create form */
     public function create()
     {
-        $categories = Category::active()->forProducts()->orderBy('name')->get();
-        return view('products.create', compact('categories'));
+        $categories  = Category::active()->forProducts()->orderBy('name')->get();
+        $unitFamilies = UnitService::getGrouped();
+        return view('products.create', compact('categories', 'unitFamilies'));
     }
 
     /** Store */
@@ -115,6 +117,7 @@ class ProductController extends Controller
             ],
             'price'       => ['required','numeric','min:0'],
             'stock'       => ['required','numeric','min:0'],
+            'unit'        => ['nullable','string','max:50'],
         ], [
             'category_id.exists' => 'The selected category is invalid or inactive.',
         ]);
@@ -128,6 +131,7 @@ class ProductController extends Controller
                 'type'        => 'product',
                 'price'       => $request->input('price'),
                 'stock'       => $request->input('stock'),
+                'unit'        => strtolower(trim($request->input('unit', 'pcs'))),
             ]);
 
             // Initial stock movement
@@ -173,8 +177,9 @@ class ProductController extends Controller
     /** Edit form */
     public function edit(Product $product)
     {
-        $categories = Category::active()->forProducts()->orderBy('name')->get();
-        return view('products.edit', compact('product', 'categories'));
+        $categories  = Category::active()->forProducts()->orderBy('name')->get();
+        $unitFamilies = UnitService::getGrouped();
+        return view('products.edit', compact('product', 'categories', 'unitFamilies'));
     }
 
     /** Update */
@@ -190,6 +195,7 @@ class ProductController extends Controller
             ],
             'price'       => ['required','numeric','min:0'],
             'stock'       => ['required','numeric','min:0'],
+            'unit'        => ['nullable','string','max:50'],
         ], [
             'category_id.exists' => 'The selected category is invalid or inactive.',
         ]);
@@ -204,6 +210,7 @@ class ProductController extends Controller
                 'category_id' => $request->integer('category_id'),
                 'price'       => $request->input('price'),
                 'stock'       => $request->input('stock'),
+                'unit'        => strtolower(trim($request->input('unit', $product->unit ?? 'pcs'))),
             ]);
 
             $newStock   = (float) $request->input('stock');

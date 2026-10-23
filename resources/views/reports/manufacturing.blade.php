@@ -116,10 +116,12 @@
                         @forelse($rawMaterialUsage as $mu)
                             <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/60">
                                 <td class="px-4 py-2 font-medium text-gray-900 dark:text-gray-100">{{ $mu['name'] }}</td>
-                                <td class="px-4 py-2 text-right text-gray-700 dark:text-gray-300">{{ $fmt2($mu['total_used']) }}</td>
+                                <td class="px-4 py-2 text-right text-gray-700 dark:text-gray-300 font-mono text-xs">
+                                    {{ $fmt2($mu['total_used']) }} <span class="text-gray-400 font-normal">{{ $mu['unit'] }}</span>
+                                </td>
                                 <td class="px-4 py-2 text-right text-gray-700 dark:text-gray-300">RWF {{ $fmt2($mu['total_cost']) }}</td>
-                                <td class="px-4 py-2 text-right {{ $mu['in_stock'] <= 0 ? 'text-rose-600 font-semibold' : 'text-gray-700 dark:text-gray-300' }}">
-                                    {{ $fmt0($mu['in_stock']) }}
+                                <td class="px-4 py-2 text-right {{ $mu['in_stock'] <= 0 ? 'text-rose-600 font-semibold' : 'text-gray-700 dark:text-gray-300' }} font-mono text-xs">
+                                    {{ $fmt2($mu['in_stock']) }} <span class="text-gray-400 font-normal">{{ $mu['unit'] }}</span>
                                     @if($mu['in_stock'] <= 0)
                                         <span class="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-700">Out</span>
                                     @endif
@@ -171,8 +173,8 @@
                         @forelse($rawMaterialsStock as $rm)
                             <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/60 {{ $rm['out'] ? 'bg-rose-50 dark:bg-rose-900/10' : ($rm['low'] ? 'bg-amber-50 dark:bg-amber-900/10' : '') }}">
                                 <td class="px-4 py-2 font-medium text-gray-900 dark:text-gray-100">{{ $rm['name'] }}</td>
-                                <td class="px-4 py-2 text-right {{ $rm['out'] ? 'text-rose-600 font-bold' : ($rm['low'] ? 'text-amber-600 font-semibold' : 'text-gray-700 dark:text-gray-300') }}">
-                                    {{ $fmt0($rm['stock']) }}
+                                <td class="px-4 py-2 text-right {{ $rm['out'] ? 'text-rose-600 font-bold' : ($rm['low'] ? 'text-amber-600 font-semibold' : 'text-gray-700 dark:text-gray-300') }} font-mono text-xs">
+                                    {{ $fmt2($rm['stock']) }} <span class="text-gray-400 font-normal">{{ $rm['unit'] }}</span>
                                     @if($rm['out'])
                                         <span class="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-rose-100 text-rose-700">Out</span>
                                     @elseif($rm['low'])
@@ -214,8 +216,8 @@
                         @forelse($finishedProductsStock as $fp)
                             <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/60 {{ $fp['out'] ? 'bg-rose-50 dark:bg-rose-900/10' : ($fp['low'] ? 'bg-amber-50 dark:bg-amber-900/10' : '') }}">
                                 <td class="px-4 py-2 font-medium text-gray-900 dark:text-gray-100">{{ $fp['name'] }}</td>
-                                <td class="px-4 py-2 text-right {{ $fp['out'] ? 'text-rose-600 font-bold' : ($fp['low'] ? 'text-amber-600 font-semibold' : 'text-gray-700 dark:text-gray-300') }}">
-                                    {{ $fmt0($fp['stock']) }}
+                                <td class="px-4 py-2 text-right {{ $fp['out'] ? 'text-rose-600 font-bold' : ($fp['low'] ? 'text-amber-600 font-semibold' : 'text-gray-700 dark:text-gray-300') }} font-mono text-xs">
+                                    {{ $fmt2($fp['stock']) }} <span class="text-gray-400 font-normal">{{ $fp['unit'] }}</span>
                                     @if($fp['out'])
                                         <span class="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-rose-100 text-rose-700">Out</span>
                                     @elseif($fp['low'])

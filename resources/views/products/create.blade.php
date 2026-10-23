@@ -177,47 +177,72 @@
                     @endcan
                 </div>
 
-                {{-- Selling Price --}}
-                <div>
-                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1" for="price">
-                        Selling Price (RWF) <span class="text-red-500">*</span>
-                    </label>
-                    <input
-                        id="price"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        name="price"
-                        value="{{ old('price') }}"
-                        required
-                        class="form-input w-full"
-                        placeholder="e.g. 1200"
-                    >
-                    @error('price')
-                        <p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ $message }}</p>
-                    @enderror
-                </div>
+                {{-- Selling Price, Unit & Initial Stock --}}
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {{-- Selling Price --}}
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1" for="price">
+                            Selling Price (RWF) <span class="text-red-500">*</span>
+                        </label>
+                        <input
+                            id="price"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            name="price"
+                            value="{{ old('price') }}"
+                            required
+                            class="form-input w-full"
+                            placeholder="e.g. 1200"
+                        >
+                        @error('price')
+                            <p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ $message }}</p>
+                        @enderror
+                    </div>
 
-                {{-- Initial Stock --}}
-                <div>
-                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1" for="stock">
-                        Initial Stock
-                    </label>
-                    <input
-                        id="stock"
-                        type="number"
-                        min="0"
-                        step="1"
-                        name="stock"
-                        value="{{ old('stock', 0) }}"
-                        class="form-input w-full"
-                    >
-                    <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-                        If greater than 0, an initial <span class="font-medium">IN</span> movement will be recorded.
-                    </p>
-                    @error('stock')
-                        <p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ $message }}</p>
-                    @enderror
+                    {{-- Product Unit / Packaging --}}
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1" for="unit">
+                            Product Unit <span class="text-red-500">*</span>
+                        </label>
+                        <select id="unit" name="unit" class="form-select w-full text-sm" required>
+                            <option value="pcs" {{ old('unit', 'pcs') === 'pcs' ? 'selected' : '' }}>Piece (pcs)</option>
+                            <option value="bottle" {{ old('unit') === 'bottle' ? 'selected' : '' }}>Bottle</option>
+                            <option value="can" {{ old('unit') === 'can' ? 'selected' : '' }}>Can</option>
+                            <option value="box" {{ old('unit') === 'box' ? 'selected' : '' }}>Box</option>
+                            <option value="pack" {{ old('unit') === 'pack' ? 'selected' : '' }}>Pack</option>
+                            <option value="bag" {{ old('unit') === 'bag' ? 'selected' : '' }}>Bag</option>
+                            <option value="carton" {{ old('unit') === 'carton' ? 'selected' : '' }}>Carton</option>
+                            <option value="crate" {{ old('unit') === 'crate' ? 'selected' : '' }}>Crate</option>
+                            <option value="kg" {{ old('unit') === 'kg' ? 'selected' : '' }}>Kilogram (kg)</option>
+                            <option value="l" {{ old('unit') === 'l' ? 'selected' : '' }}>Liter (L)</option>
+                        </select>
+                        @error('unit')
+                            <p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    {{-- Initial Stock --}}
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1" for="stock">
+                            Initial Stock
+                        </label>
+                        <input
+                            id="stock"
+                            type="number"
+                            min="0"
+                            step="any"
+                            name="stock"
+                            value="{{ old('stock', 0) }}"
+                            class="form-input w-full"
+                        >
+                        <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
+                            Initial <span class="font-medium">IN</span> movement recorded.
+                        </p>
+                        @error('stock')
+                            <p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ $message }}</p>
+                        @enderror
+                    </div>
                 </div>
 
                 {{-- Actions --}}

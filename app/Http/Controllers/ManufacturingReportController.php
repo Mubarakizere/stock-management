@@ -40,17 +40,19 @@ class ManufacturingReportController extends Controller
         // ==========================================
         $rawMaterialUsage = ProductionMaterial::select(
                 'raw_material_id',
-                DB::raw('SUM(quantity_used) as total_used')
+                DB::raw('SUM(COALESCE(base_quantity_used, quantity_used)) as total_used')
             )
             ->whereHas('production', fn($q) => $q->whereBetween('produced_at', [$start, $end]))
-            ->with('rawMaterial:id,name,price,stock')
+            ->with('rawMaterial:id,name,price,stock,unit')
             ->groupBy('raw_material_id')
             ->orderByDesc('total_used')
             ->get()
             ->map(function ($m) {
                 $rm = $m->rawMaterial;
+                $unit = $rm->unit ?? 'pcs';
                 return [
                     'name'       => $rm->name ?? '—',
+                    'unit'       => $unit,
                     'total_used' => (float) $m->total_used,
                     'unit_cost'  => (float) ($rm->price ?? 0),
                     'total_cost' => (float) $m->total_used * (float) ($rm->price ?? 0),
@@ -73,6 +75,7 @@ class ManufacturingReportController extends Controller
                 $stock = max(0, (float)($p->qty_in ?? 0) - (float)($p->qty_out ?? 0));
                 return [
                     'name'     => $p->name,
+                    'unit'     => $p->unit ?? 'kg',
                     'category' => $p->category->name ?? '—',
                     'stock'    => $stock,
                     'value'    => $stock * (float)($p->price ?? 0),
@@ -92,6 +95,7 @@ class ManufacturingReportController extends Controller
                 $stock = max(0, (float)($p->qty_in ?? 0) - (float)($p->qty_out ?? 0));
                 return [
                     'name'     => $p->name,
+                    'unit'     => $p->unit ?? 'pcs',
                     'category' => $p->category->name ?? '—',
                     'stock'    => $stock,
                     'value'    => $stock * (float)($p->price ?? 0),

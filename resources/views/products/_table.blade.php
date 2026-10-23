@@ -124,6 +124,7 @@
                              : ($low ? 'text-amber-700 dark:text-amber-400'
                                      : 'text-gray-900 dark:text-gray-100') }}">
                     <span data-stock>{{ number_format($stk) }}</span>
+                    <span class="text-xs text-gray-500 font-normal ml-0.5">{{ $p->unit ?? 'pcs' }}</span>
                     @if($zero)
                         <span class="ml-2 px-2 py-0.5 text-[11px] rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300">
                             Out

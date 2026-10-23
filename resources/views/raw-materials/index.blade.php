@@ -215,30 +215,33 @@
                             </td>
 
                             <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
-                                RWF {{ $fmt2($cost) }}
+                                <div>RWF {{ $fmt2($cost) }}</div>
+                                <div class="text-[10px] text-gray-400">/ {{ $p->unit ?? 'kg' }}</div>
                             </td>
 
                             <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
-                                RWF {{ $fmt2($price) }}
+                                <div>RWF {{ $fmt2($price) }}</div>
+                                <div class="text-[10px] text-gray-400">/ {{ $p->unit ?? 'kg' }}</div>
                             </td>
 
-                            <td class="px-4 py-3 text-right text-emerald-700 dark:text-emerald-300 font-semibold">
-                                {{ $fmt0($in) }}
+                            <td class="px-4 py-3 text-right text-emerald-700 dark:text-emerald-300 font-semibold font-mono text-xs">
+                                {{ $fmt2($in) }}
                             </td>
 
-                            <td class="px-4 py-3 text-right text-rose-700 dark:text-rose-300 font-semibold">
-                                {{ $fmt0($out) }}
+                            <td class="px-4 py-3 text-right text-rose-700 dark:text-rose-300 font-semibold font-mono text-xs">
+                                {{ $fmt2($out) }}
                             </td>
 
                             <td class="px-4 py-3 text-right font-semibold
                                 {{ $zero ? 'text-rose-600 dark:text-rose-300'
                                          : ($low ? 'text-amber-700 dark:text-amber-300'
                                                  : 'text-gray-900 dark:text-gray-100') }}">
-                                <span data-stock>{{ $fmt0($stk) }}</span>
+                                <span data-stock class="font-mono">{{ $fmt2($stk) }}</span>
+                                <span class="text-xs font-normal text-gray-500 dark:text-gray-400 ml-0.5">{{ $p->unit ?? 'kg' }}</span>
                                 @if($zero)
-                                    <span class="ml-2 px-2 py-0.5 text-[11px] rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300">Out</span>
+                                    <span class="ml-1.5 px-1.5 py-0.5 text-[10px] rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300">Out</span>
                                 @elseif($low)
-                                    <span class="ml-2 px-2 py-0.5 text-[11px] rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">Low</span>
+                                    <span class="ml-1.5 px-1.5 py-0.5 text-[10px] rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">Low</span>
                                 @endif
                             </td>
 

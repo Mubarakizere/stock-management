@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
+use App\Services\UnitService;
 
 class RawMaterialController extends Controller
 {
@@ -71,8 +72,9 @@ class RawMaterialController extends Controller
     /** Create form */
     public function create()
     {
-        $categories = Category::active()->forRawMaterials()->orderBy('name')->get();
-        return view('raw-materials.create', compact('categories'));
+        $categories  = Category::active()->forRawMaterials()->orderBy('name')->get();
+        $unitFamilies = UnitService::getGrouped();
+        return view('raw-materials.create', compact('categories', 'unitFamilies'));
     }
 
     /** Store */
@@ -88,6 +90,7 @@ class RawMaterialController extends Controller
             ],
             'price'       => ['required','numeric','min:0'],
             'stock'       => ['required','numeric','min:0'],
+            'unit'        => ['nullable','string','max:50'],
         ], [
             'category_id.exists' => 'The selected category is invalid or inactive.',
         ]);
@@ -101,6 +104,7 @@ class RawMaterialController extends Controller
                 'type'        => 'raw_material',
                 'price'       => $request->input('price'),
                 'stock'       => $request->input('stock'),
+                'unit'        => strtolower(trim($request->input('unit', 'kg'))),
             ]);
 
             if ($request->float('stock', 0) > 0) {
@@ -153,9 +157,10 @@ class RawMaterialController extends Controller
     /** Edit form */
     public function edit(Product $raw_material)
     {
-        $product    = $raw_material;
-        $categories = Category::active()->forRawMaterials()->orderBy('name')->get();
-        return view('raw-materials.edit', compact('product', 'categories'));
+        $product     = $raw_material;
+        $categories  = Category::active()->forRawMaterials()->orderBy('name')->get();
+        $unitFamilies = UnitService::getGrouped();
+        return view('raw-materials.edit', compact('product', 'categories', 'unitFamilies'));
     }
 
     /** Update */
@@ -173,6 +178,7 @@ class RawMaterialController extends Controller
             ],
             'price'       => ['required','numeric','min:0'],
             'stock'       => ['required','numeric','min:0'],
+            'unit'        => ['nullable','string','max:50'],
         ], [
             'category_id.exists' => 'The selected category is invalid or inactive.',
         ]);
@@ -187,6 +193,7 @@ class RawMaterialController extends Controller
                 'category_id' => $request->integer('category_id'),
                 'price'       => $request->input('price'),
                 'stock'       => $request->input('stock'),
+                'unit'        => strtolower(trim($request->input('unit', $product->unit ?? 'kg'))),
             ]);
 
             $newStock   = (float) $request->input('stock');

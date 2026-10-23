@@ -187,8 +187,8 @@
                     </p>
                 </div>
 
-                {{-- Price & Stock --}}
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {{-- Price, Unit & Stock --}}
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                         <label class="form-label" for="price">
                             Selling Price (RWF) <span class="text-red-500">*</span>
@@ -209,6 +209,31 @@
                         @enderror
                     </div>
 
+                    {{-- Product Unit --}}
+                    <div>
+                        <label class="form-label" for="unit">
+                            Product Unit <span class="text-red-500">*</span>
+                        </label>
+                        @php
+                            $prodUnit = strtolower(old('unit', $product->unit ?? 'pcs'));
+                        @endphp
+                        <select id="unit" name="unit" class="form-select w-full text-sm" required>
+                            <option value="pcs" {{ $prodUnit === 'pcs' ? 'selected' : '' }}>Piece (pcs)</option>
+                            <option value="bottle" {{ $prodUnit === 'bottle' ? 'selected' : '' }}>Bottle</option>
+                            <option value="can" {{ $prodUnit === 'can' ? 'selected' : '' }}>Can</option>
+                            <option value="box" {{ $prodUnit === 'box' ? 'selected' : '' }}>Box</option>
+                            <option value="pack" {{ $prodUnit === 'pack' ? 'selected' : '' }}>Pack</option>
+                            <option value="bag" {{ $prodUnit === 'bag' ? 'selected' : '' }}>Bag</option>
+                            <option value="carton" {{ $prodUnit === 'carton' ? 'selected' : '' }}>Carton</option>
+                            <option value="crate" {{ $prodUnit === 'crate' ? 'selected' : '' }}>Crate</option>
+                            <option value="kg" {{ $prodUnit === 'kg' ? 'selected' : '' }}>Kilogram (kg)</option>
+                            <option value="l" {{ $prodUnit === 'l' ? 'selected' : '' }}>Liter (L)</option>
+                        </select>
+                        @error('unit')
+                            <p class="text-red-600 dark:text-red-400 text-sm mt-1">{{ $message }}</p>
+                        @enderror
+                    </div>
+
                     <div>
                         <label class="form-label" for="stock">
                             Stock <span class="text-red-500">*</span>
@@ -216,18 +241,13 @@
                         <input
                             id="stock"
                             type="number"
-                            step="1"
+                            step="any"
                             min="0"
                             name="stock"
                             value="{{ old('stock', $product->stock) }}"
                             required
                             class="form-input w-full"
                         >
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            Changing this value will create a stock
-                            <span class="font-medium">adjustment</span>
-                            (IN for increase, OUT for decrease) using the product’s cost/price as unit cost.
-                        </p>
                         @error('stock')
                             <p class="text-red-600 dark:text-red-400 text-sm mt-1">{{ $message }}</p>
                         @enderror

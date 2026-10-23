@@ -12,11 +12,14 @@ class ProductionMaterial extends Model
         'raw_material_id',
         'quantity_per_unit',
         'quantity_used',
+        'unit',
+        'base_quantity_used',
     ];
 
     protected $casts = [
-        'quantity_per_unit' => 'decimal:2',
-        'quantity_used'     => 'decimal:2',
+        'quantity_per_unit'  => 'decimal:2',
+        'quantity_used'      => 'decimal:2',
+        'base_quantity_used' => 'decimal:4',
     ];
 
     /** The production run this belongs to */
@@ -29,5 +32,19 @@ class ProductionMaterial extends Model
     public function rawMaterial(): BelongsTo
     {
         return $this->belongsTo(Product::class, 'raw_material_id');
+    }
+
+    /**
+     * Display quantity consumed with unit.
+     */
+    public function formattedQuantityUsed(): string
+    {
+        $qty = (float) $this->quantity_used;
+        $formatted = number_format($qty, 2);
+        if (str_contains($formatted, '.')) {
+            $formatted = rtrim(rtrim($formatted, '0'), '.');
+        }
+        $unit = $this->unit ?: ($this->rawMaterial->unit ?? 'pcs');
+        return "{$formatted} {$unit}";
     }
 }
