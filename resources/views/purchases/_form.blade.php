@@ -12,10 +12,17 @@
     $initialLines = collect(old('products',
         $isEdit
             ? $purchase->items->map(fn($i) => [
-                'product_id' => (int)   $i->product_id,
-                'name'       => $i->product ? $i->product->name : 'Product #'.$i->product_id,
-                'quantity'   => (float) $i->quantity,
-                'unit_cost'  => (float) $i->unit_cost,
+                'product_id'           => (int)   $i->product_id,
+                'name'                 => $i->product ? $i->product->name : 'Product #'.$i->product_id,
+                'quantity'             => (float) $i->quantity,
+                'unit_cost'            => (float) $i->unit_cost,
+                'previous_cost'        => (float) ($i->product?->cost_price ?: $i->product?->price ?: $i->unit_cost),
+                'last_cost'            => (float) ($i->product?->last_purchase_price ?: 0),
+                'selling_price'        => (float) ($i->product?->price ?: 0),
+                'target_margin'        => (float) ($i->product?->target_margin ?: 0),
+                'type'                 => $i->product?->type ?: 'raw_material',
+                'update_catalog_cost'  => true,
+                'update_selling_price' => false,
             ])->values()->all()
             : []
     ));
@@ -135,12 +142,27 @@
                     
                     <div class="flex-1 overflow-y-auto pr-2 space-y-2 border border-gray-200 dark:border-gray-700 rounded-xl p-2 bg-gray-50/50 dark:bg-gray-900/50">
                         @foreach($products as $p)
+                            @php
+                                $cCost = (float)($p->cost_price ?: $p->price ?: 0);
+                                $lCost = (float)($p->last_purchase_price ?: 0);
+                                $sPrice = (float)($p->price ?: 0);
+                                $tMargin = (float)($p->target_margin ?: 0);
+                            @endphp
                             <div x-show="matchesSearch('{{ addslashes($p->name) }}')" class="flex justify-between items-center p-3 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-xl hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors shadow-sm">
                                 <div>
                                     <h4 class="font-bold text-gray-800 dark:text-gray-100">{{ $p->name }}</h4>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">Cost: RWF {{ number_format($p->cost_price ?? 0, 2) }}</p>
+                                    <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                        <span>Cost: RWF {{ number_format($cCost, 2) }}</span>
+                                        @if($lCost > 0 && $lCost != $cCost)
+                                            <span class="text-indigo-600 dark:text-indigo-400 font-medium">• Last: RWF {{ number_format($lCost, 2) }}</span>
+                                        @endif
+                                        @if($p->unit)
+                                            <span class="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-[10px]">{{ $p->unit }}</span>
+                                        @endif
+                                    </div>
                                 </div>
-                                <button type="button" class="btn btn-primary btn-sm px-4 py-2 rounded-lg flex items-center gap-1" @click="addToCart({{ $p->id }}, '{{ addslashes($p->name) }}', {{ $p->cost_price ?? 0 }})">
+                                <button type="button" class="btn btn-primary btn-sm px-4 py-2 rounded-lg flex items-center gap-1 shadow-sm"
+                                        @click="addToCart({{ $p->id }}, '{{ addslashes($p->name) }}', {{ $cCost }}, {{ $lCost }}, {{ $sPrice }}, {{ $tMargin }}, '{{ $p->type ?: 'raw_material' }}')">
                                     <i data-lucide="plus" class="w-4 h-4"></i> Add
                                 </button>
                             </div>
@@ -175,16 +197,46 @@
                                         </button>
                                     </div>
                                     
-                                    <div class="flex gap-4 items-end">
-                                        <div class="flex-1">
+                                    <div class="flex gap-4 items-start">
+                                        <div class="w-28 sm:w-32">
                                             <label class="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider mb-1 block">Quantity</label>
                                             <input type="number" step="0.01" min="0.01" class="form-input font-bold text-lg py-2" x-model.number="row.quantity" :name="`products[${idx}][quantity]`" @input="recalc()">
                                         </div>
                                         <div class="flex-1">
-                                            <label class="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider mb-1 block">Unit Cost (RWF)</label>
+                                            <label class="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider mb-1 block">Purchase Cost (RWF)</label>
                                             <input type="number" step="0.01" min="0" class="form-input font-bold text-lg py-2" x-model.number="row.unit_cost" :name="`products[${idx}][unit_cost]`" @input="recalc()">
+
+                                            {{-- Price Change Alert / Badge --}}
+                                            <div class="mt-2 flex flex-wrap items-center gap-1.5" x-show="priceDiffPct(row) !== 0">
+                                                <template x-if="priceDiffPct(row) > 0">
+                                                    <span class="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-lg border border-rose-200 dark:border-rose-800">
+                                                        ▲ +<span x-text="priceDiffPct(row)"></span>% price increase (Prev: RWF <span x-text="formatMoney(row.previous_cost)"></span>)
+                                                    </span>
+                                                </template>
+                                                <template x-if="priceDiffPct(row) < 0">
+                                                    <span class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                                                        ▼ -<span x-text="Math.abs(priceDiffPct(row))"></span>% price decrease (Prev: RWF <span x-text="formatMoney(row.previous_cost)"></span>)
+                                                    </span>
+                                                </template>
+                                            </div>
+
+                                            {{-- Cost / Price Update Options --}}
+                                            <div class="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/60 space-y-1.5 text-xs">
+                                                <label class="inline-flex items-center gap-2 text-gray-700 dark:text-gray-300 cursor-pointer">
+                                                    <input type="checkbox" x-model="row.update_catalog_cost" :name="`products[${idx}][update_catalog_cost]`" value="1" class="rounded text-indigo-600 border-gray-300 dark:border-gray-600">
+                                                    <span>Update catalog cost to <strong>RWF <span x-text="formatMoney(row.unit_cost)"></span></strong></span>
+                                                </label>
+
+                                                <div x-show="row.type === 'product' || row.target_margin > 0 || row.selling_price > 0">
+                                                    <label class="inline-flex items-center gap-2 text-indigo-700 dark:text-indigo-300 cursor-pointer">
+                                                        <input type="checkbox" x-model="row.update_selling_price" :name="`products[${idx}][update_selling_price]`" value="1" class="rounded text-indigo-600 border-gray-300 dark:border-gray-600">
+                                                        <span>Adjust selling price to <strong>RWF <span x-text="formatMoney(calcSuggestedPrice(row))"></span></strong> (<span x-text="row.target_margin || 25"></span>% margin)</span>
+                                                    </label>
+                                                    <input type="hidden" :name="`products[${idx}][new_selling_price]`" :value="calcSuggestedPrice(row)">
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div class="flex-1 text-right bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border border-gray-100 dark:border-gray-700">
+                                        <div class="w-32 sm:w-36 text-right bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border border-gray-100 dark:border-gray-700 shrink-0">
                                             <label class="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider block">Line Total</label>
                                             <span class="font-black text-indigo-700 dark:text-indigo-400 text-lg" x-text="formatMoney(lineTotal(row))"></span>
                                         </div>
@@ -397,7 +449,7 @@ function purchaseForm(initial){
             return document.querySelectorAll(`[x-show="matchesSearch('...' )]`).length > 0;
         },
 
-        addToCart(id, name, cost) {
+        addToCart(id, name, cost, lastCost = 0, selling = 0, margin = 0, type = 'raw_material') {
             // check if already exists
             const existing = this.state.lines.find(l => l.product_id === id);
             if(existing) {
@@ -409,9 +461,29 @@ function purchaseForm(initial){
                     name: name,
                     quantity: 1,
                     unit_cost: cost,
+                    previous_cost: cost,
+                    last_cost: lastCost,
+                    selling_price: selling,
+                    target_margin: margin,
+                    type: type,
+                    update_catalog_cost: true,
+                    update_selling_price: false,
                 });
             }
             this.recalc();
+        },
+
+        calcSuggestedPrice(row) {
+            const cost = Number(row.unit_cost || 0);
+            const margin = Number(row.target_margin || 25);
+            return Number((cost * (1 + (margin / 100))).toFixed(2));
+        },
+
+        priceDiffPct(row) {
+            const oldCost = Number(row.previous_cost || 0);
+            const newCost = Number(row.unit_cost || 0);
+            if (oldCost <= 0) return 0;
+            return Number((((newCost - oldCost) / oldCost) * 100).toFixed(1));
         },
 
         removeLine(i) {

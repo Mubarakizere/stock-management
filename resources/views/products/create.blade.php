@@ -177,28 +177,103 @@
                     @endcan
                 </div>
 
-                {{-- Selling Price, Unit & Initial Stock --}}
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {{-- Selling Price --}}
-                    <div>
-                        <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1" for="price">
-                            Selling Price (RWF) <span class="text-red-500">*</span>
-                        </label>
-                        <input
-                            id="price"
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            name="price"
-                            value="{{ old('price') }}"
-                            required
-                            class="form-input w-full"
-                            placeholder="e.g. 1200"
-                        >
-                        @error('price')
-                            <p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ $message }}</p>
-                        @enderror
+                {{-- Pricing, Margin & Cost Section --}}
+                <div x-data="{
+                    price: Number('{{ old('price', 0) }}'),
+                    cost: Number('{{ old('cost_price', 0) }}'),
+                    margin: Number('{{ old('target_margin', 0) }}'),
+                    onCostOrMarginChange() {
+                        if (this.cost > 0 && this.margin > 0) {
+                            this.price = Number((this.cost * (1 + (this.margin / 100))).toFixed(2));
+                        }
+                    },
+                    calcMargin() {
+                        if (this.price > 0 && this.cost > 0) {
+                            return (((this.price - this.cost) / this.price) * 100).toFixed(1);
+                        }
+                        return 0;
+                    }
+                }" class="space-y-4 p-4 rounded-xl bg-gray-50/70 dark:bg-gray-900/40 border border-gray-200/80 dark:border-gray-700/80">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase tracking-wider text-gray-700 dark:text-gray-300">Cost & Pricing Strategy</span>
+                        <div class="text-xs text-gray-500 dark:text-gray-400" x-show="price > 0 && cost > 0">
+                            <span>Effective Margin: </span>
+                            <span :class="price >= cost ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-rose-600 dark:text-rose-400 font-bold'" x-text="calcMargin() + '%'"></span>
+                        </div>
                     </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        {{-- Cost Price --}}
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1" for="cost_price">
+                                Cost Price (RWF)
+                            </label>
+                            <input
+                                id="cost_price"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                name="cost_price"
+                                x-model.number="cost"
+                                @input="onCostOrMarginChange()"
+                                class="form-input w-full"
+                                placeholder="e.g. 800"
+                            >
+                            <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">What it costs to produce or buy</p>
+                            @error('cost_price')
+                                <p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        {{-- Target Margin % --}}
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1" for="target_margin">
+                                Target Margin (%)
+                            </label>
+                            <input
+                                id="target_margin"
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                max="1000"
+                                name="target_margin"
+                                x-model.number="margin"
+                                @input="onCostOrMarginChange()"
+                                class="form-input w-full"
+                                placeholder="e.g. 25"
+                            >
+                            <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">Auto-adjusts selling price</p>
+                            @error('target_margin')
+                                <p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        {{-- Selling Price --}}
+                        <div>
+                            <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1" for="price">
+                                Selling Price (RWF) <span class="text-red-500">*</span>
+                            </label>
+                            <input
+                                id="price"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                name="price"
+                                x-model.number="price"
+                                required
+                                class="form-input w-full font-bold text-indigo-700 dark:text-indigo-400"
+                                placeholder="e.g. 1200"
+                            >
+                            <p class="text-[10px] text-gray-500 dark:text-gray-400 mt-1">What customers pay</p>
+                            @error('price')
+                                <p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ $message }}</p>
+                            @enderror
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Unit & Initial Stock --}}
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
                     {{-- Product Unit / Packaging --}}
                     <div>

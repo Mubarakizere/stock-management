@@ -108,16 +108,18 @@ class ProductController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name'        => ['required','string','max:255'],
-            'category_id' => [
+            'name'          => ['required','string','max:255'],
+            'category_id'   => [
                 'required','integer',
                 Rule::exists('categories','id')->where(fn($q) =>
                     $q->whereNull('deleted_at')->where('is_active', true)->whereIn('kind',['product','both'])
                 ),
             ],
-            'price'       => ['required','numeric','min:0'],
-            'stock'       => ['required','numeric','min:0'],
-            'unit'        => ['nullable','string','max:50'],
+            'price'         => ['required','numeric','min:0'],
+            'cost_price'    => ['nullable','numeric','min:0'],
+            'target_margin' => ['nullable','numeric','min:0','max:1000'],
+            'stock'         => ['required','numeric','min:0'],
+            'unit'          => ['nullable','string','max:50'],
         ], [
             'category_id.exists' => 'The selected category is invalid or inactive.',
         ]);
@@ -125,13 +127,18 @@ class ProductController extends Controller
         try {
             DB::beginTransaction();
 
+            $costPrice = $request->filled('cost_price') ? $request->float('cost_price') : 0.0;
+
             $product = Product::create([
-                'name'        => $request->name,
-                'category_id' => $request->integer('category_id'),
-                'type'        => 'product',
-                'price'       => $request->input('price'),
-                'stock'       => $request->input('stock'),
-                'unit'        => strtolower(trim($request->input('unit', 'pcs'))),
+                'name'                => $request->name,
+                'category_id'         => $request->integer('category_id'),
+                'type'                => 'product',
+                'price'               => $request->input('price'),
+                'cost_price'          => $costPrice,
+                'last_purchase_price' => $costPrice > 0 ? $costPrice : null,
+                'target_margin'       => $request->float('target_margin', 0),
+                'stock'               => $request->input('stock'),
+                'unit'                => strtolower(trim($request->input('unit', 'pcs'))),
             ]);
 
             // Initial stock movement
@@ -186,16 +193,18 @@ class ProductController extends Controller
     public function update(Request $request, Product $product)
     {
         $request->validate([
-            'name'        => ['required','string','max:255'],
-            'category_id' => [
+            'name'          => ['required','string','max:255'],
+            'category_id'   => [
                 'required','integer',
                 Rule::exists('categories','id')->where(fn($q) =>
                     $q->whereNull('deleted_at')->where('is_active', true)->whereIn('kind',['product','both'])
                 ),
             ],
-            'price'       => ['required','numeric','min:0'],
-            'stock'       => ['required','numeric','min:0'],
-            'unit'        => ['nullable','string','max:50'],
+            'price'         => ['required','numeric','min:0'],
+            'cost_price'    => ['nullable','numeric','min:0'],
+            'target_margin' => ['nullable','numeric','min:0','max:1000'],
+            'stock'         => ['required','numeric','min:0'],
+            'unit'          => ['nullable','string','max:50'],
         ], [
             'category_id.exists' => 'The selected category is invalid or inactive.',
         ]);
@@ -205,13 +214,22 @@ class ProductController extends Controller
 
             $oldStock = $product->currentStock();
 
-            $product->update([
+            $updateData = [
                 'name'        => $request->name,
                 'category_id' => $request->integer('category_id'),
                 'price'       => $request->input('price'),
                 'stock'       => $request->input('stock'),
                 'unit'        => strtolower(trim($request->input('unit', $product->unit ?? 'pcs'))),
-            ]);
+            ];
+
+            if ($request->has('cost_price')) {
+                $updateData['cost_price'] = $request->float('cost_price');
+            }
+            if ($request->has('target_margin')) {
+                $updateData['target_margin'] = $request->float('target_margin');
+            }
+
+            $product->update($updateData);
 
             $newStock   = (float) $request->input('stock');
             $difference = $newStock - (float) $oldStock;

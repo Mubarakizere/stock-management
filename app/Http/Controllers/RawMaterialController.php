@@ -19,8 +19,8 @@ class RawMaterialController extends Controller
     public function index(Request $request)
     {
         $threshold = 5;
-        $perPage   = (int) $request->input('per_page', 20);
-        $op        = DB::connection()->getDriverName() === 'pgsql' ? 'ILIKE' : 'LIKE';
+        $perPage = (int) $request->input('per_page', 20);
+        $op = DB::connection()->getDriverName() === 'pgsql' ? 'ILIKE' : 'LIKE';
 
         $categories = Category::active()->forRawMaterials()->orderBy('name')->get();
 
@@ -35,7 +35,8 @@ class RawMaterialController extends Controller
             $pattern = "%{$s}%";
             $query->where(function ($w) use ($op, $pattern, $s) {
                 $w->where('name', $op, $pattern);
-                if (is_numeric($s)) $w->orWhere('id', (int) $s);
+                if (is_numeric($s))
+                    $w->orWhere('id', (int) $s);
             });
         }
 
@@ -72,7 +73,7 @@ class RawMaterialController extends Controller
     /** Create form */
     public function create()
     {
-        $categories  = Category::active()->forRawMaterials()->orderBy('name')->get();
+        $categories = Category::active()->forRawMaterials()->orderBy('name')->get();
         $unitFamilies = UnitService::getGrouped();
         return view('raw-materials.create', compact('categories', 'unitFamilies'));
     }
@@ -81,16 +82,19 @@ class RawMaterialController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name'        => ['required','string','max:255'],
+            'name' => ['required', 'string', 'max:255'],
             'category_id' => [
-                'required','integer',
-                Rule::exists('categories','id')->where(fn($q) =>
-                    $q->whereNull('deleted_at')->where('is_active', true)->where('kind', 'raw_material')
+                'required',
+                'integer',
+                Rule::exists('categories', 'id')->where(
+                    fn($q) =>
+                        $q->whereNull('deleted_at')->where('is_active', true)->where('kind', 'raw_material')
                 ),
             ],
-            'price'       => ['required','numeric','min:0'],
-            'stock'       => ['required','numeric','min:0'],
-            'unit'        => ['nullable','string','max:50'],
+            'price' => ['required', 'numeric', 'min:0'],
+            'cost_price' => ['nullable', 'numeric', 'min:0'],
+            'stock' => ['required', 'numeric', 'min:0'],
+            'unit' => ['nullable', 'string', 'max:50'],
         ], [
             'category_id.exists' => 'The selected category is invalid or inactive.',
         ]);
@@ -98,26 +102,30 @@ class RawMaterialController extends Controller
         try {
             DB::beginTransaction();
 
+            $cost = $request->filled('cost_price') ? $request->float('cost_price') : $request->float('price');
+
             $product = Product::create([
-                'name'        => $request->name,
+                'name' => $request->name,
                 'category_id' => $request->integer('category_id'),
-                'type'        => 'raw_material',
-                'price'       => $request->input('price'),
-                'stock'       => $request->input('stock'),
-                'unit'        => strtolower(trim($request->input('unit', 'kg'))),
+                'type' => 'raw_material',
+                'price' => $cost,
+                'cost_price' => $cost,
+                'last_purchase_price' => $cost > 0 ? $cost : null,
+                'stock' => $request->input('stock'),
+                'unit' => strtolower(trim($request->input('unit', 'kg'))),
             ]);
 
             if ($request->float('stock', 0) > 0) {
                 $uc = $product->cost_price ?? $product->price ?? 0;
                 StockMovement::create([
-                    'product_id'  => $product->id,
-                    'type'        => 'in',
-                    'quantity'    => $request->float('stock'),
-                    'unit_cost'   => $uc,
-                    'total_cost'  => $uc * $request->float('stock'),
+                    'product_id' => $product->id,
+                    'type' => 'in',
+                    'quantity' => $request->float('stock'),
+                    'unit_cost' => $uc,
+                    'total_cost' => $uc * $request->float('stock'),
                     'source_type' => Product::class,
-                    'source_id'   => $product->id,
-                    'user_id'     => Auth::id(),
+                    'source_id' => $product->id,
+                    'user_id' => Auth::id(),
                 ]);
             }
 
@@ -136,13 +144,16 @@ class RawMaterialController extends Controller
     public function show(Product $raw_material)
     {
         $product = $raw_material;
-        $product->load(['category' => fn($q) => $q->withTrashed(), 'stockMovements' => function ($q) {
-            $q->latest()->take(10)->with('user');
-        }]);
+        $product->load([
+            'category' => fn($q) => $q->withTrashed(),
+            'stockMovements' => function ($q) {
+                $q->latest()->take(10)->with('user');
+            }
+        ]);
 
-        $totalIn  = $product->stockMovements()->where('type', 'in')->sum('quantity');
+        $totalIn = $product->stockMovements()->where('type', 'in')->sum('quantity');
         $totalOut = $product->stockMovements()->where('type', 'out')->sum('quantity');
-        $current  = $product->currentStock();
+        $current = $product->currentStock();
 
         // Purchase price history
         $purchaseHistory = \App\Models\PurchaseItem::where('product_id', $product->id)
@@ -157,8 +168,8 @@ class RawMaterialController extends Controller
     /** Edit form */
     public function edit(Product $raw_material)
     {
-        $product     = $raw_material;
-        $categories  = Category::active()->forRawMaterials()->orderBy('name')->get();
+        $product = $raw_material;
+        $categories = Category::active()->forRawMaterials()->orderBy('name')->get();
         $unitFamilies = UnitService::getGrouped();
         return view('raw-materials.edit', compact('product', 'categories', 'unitFamilies'));
     }
@@ -169,16 +180,19 @@ class RawMaterialController extends Controller
         $product = $raw_material;
 
         $request->validate([
-            'name'        => ['required','string','max:255'],
+            'name' => ['required', 'string', 'max:255'],
             'category_id' => [
-                'required','integer',
-                Rule::exists('categories','id')->where(fn($q) =>
-                    $q->whereNull('deleted_at')->where('is_active', true)->where('kind', 'raw_material')
+                'required',
+                'integer',
+                Rule::exists('categories', 'id')->where(
+                    fn($q) =>
+                        $q->whereNull('deleted_at')->where('is_active', true)->where('kind', 'raw_material')
                 ),
             ],
-            'price'       => ['required','numeric','min:0'],
-            'stock'       => ['required','numeric','min:0'],
-            'unit'        => ['nullable','string','max:50'],
+            'price' => ['required', 'numeric', 'min:0'],
+            'cost_price' => ['nullable', 'numeric', 'min:0'],
+            'stock' => ['required', 'numeric', 'min:0'],
+            'unit' => ['nullable', 'string', 'max:50'],
         ], [
             'category_id.exists' => 'The selected category is invalid or inactive.',
         ]);
@@ -187,29 +201,46 @@ class RawMaterialController extends Controller
             DB::beginTransaction();
 
             $oldStock = $product->currentStock();
+            $cost = $request->filled('cost_price') ? $request->float('cost_price') : $request->float('price');
 
             $product->update([
-                'name'        => $request->name,
+                'name' => $request->name,
                 'category_id' => $request->integer('category_id'),
-                'price'       => $request->input('price'),
-                'stock'       => $request->input('stock'),
-                'unit'        => strtolower(trim($request->input('unit', $product->unit ?? 'kg'))),
+                'price' => $cost,
+                'cost_price' => $cost,
+                'stock' => $request->input('stock'),
+                'unit' => strtolower(trim($request->input('unit', $product->unit ?? 'kg'))),
             ]);
 
-            $newStock   = (float) $request->input('stock');
+            // Sync downstream finished goods recipe costs
+            $recipeItems = \App\Models\ProductRecipe::where('raw_material_id', $product->id)->with('product')->get();
+            foreach ($recipeItems as $ri) {
+                if ($finishedProduct = $ri->product) {
+                    $newRecipeCost = $finishedProduct->estimatedRecipeCost();
+                    if ($newRecipeCost !== null) {
+                        $finishedProduct->cost_price = $newRecipeCost;
+                        if ((float) ($finishedProduct->target_margin ?? 0) > 0) {
+                            $finishedProduct->price = $finishedProduct->suggestedSellingPrice($newRecipeCost);
+                        }
+                        $finishedProduct->save();
+                    }
+                }
+            }
+
+            $newStock = (float) $request->input('stock');
             $difference = $newStock - (float) $oldStock;
 
             if ($difference != 0) {
                 $uc = $product->cost_price ?? $product->price ?? 0;
                 StockMovement::create([
-                    'product_id'  => $product->id,
-                    'type'        => $difference > 0 ? 'in' : 'out',
-                    'quantity'    => abs($difference),
-                    'unit_cost'   => $uc,
-                    'total_cost'  => abs($difference) * $uc,
+                    'product_id' => $product->id,
+                    'type' => $difference > 0 ? 'in' : 'out',
+                    'quantity' => abs($difference),
+                    'unit_cost' => $uc,
+                    'total_cost' => abs($difference) * $uc,
                     'source_type' => Product::class,
-                    'source_id'   => $product->id,
-                    'user_id'     => Auth::id(),
+                    'source_id' => $product->id,
+                    'user_id' => Auth::id(),
                 ]);
             }
 

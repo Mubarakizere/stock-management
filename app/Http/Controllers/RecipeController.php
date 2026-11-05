@@ -90,6 +90,16 @@ class RecipeController extends Controller
                 ]);
             }
 
+            // Recalculate finished good cost_price from recipe
+            $recCost = $product->estimatedRecipeCost();
+            if ($recCost !== null) {
+                $product->cost_price = $recCost;
+                if ((float)($product->target_margin ?? 0) > 0) {
+                    $product->price = $product->suggestedSellingPrice($recCost);
+                }
+                $product->save();
+            }
+
             DB::commit();
             Log::info('Recipe updated with units', [
                 'product_id'       => $product->id,

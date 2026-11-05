@@ -108,7 +108,7 @@ class PurchaseController extends Controller
     public function create()
     {
         $suppliers = Supplier::orderBy('name')->get();
-        $products  = Product::rawMaterials()->orderBy('name')->get(['id', 'name', 'cost_price']);
+        $products  = Product::rawMaterials()->orderBy('name')->get(['id', 'name', 'type', 'cost_price', 'price', 'last_purchase_price', 'target_margin', 'unit']);
         $categories = Category::active()->forRawMaterials()->ordered()
             ->with(['products' => fn($q) => $q->rawMaterials()->orderBy('name')])
             ->get();
@@ -193,6 +193,7 @@ class PurchaseController extends Controller
 
             // 3) Items + movements (track affected products)
             $affectedIds = [];
+            $wacProductIds = [];
             foreach ($request->products as $row) {
                 $pid       = (int)$row['product_id'];
                 $qty       = (float)$row['quantity'];
@@ -208,8 +209,43 @@ class PurchaseController extends Controller
                 ]);
 
                 if ($product = Product::find($pid)) {
-                    // Incremental WAC (fast path)
-                    $this->updateWeightedAverageCost($product, $qty, $unitCost);
+                    // Always record latest purchase unit cost
+                    $product->last_purchase_price = $unitCost;
+
+                    $updateCatalog = isset($row['update_catalog_cost'])
+                        ? filter_var($row['update_catalog_cost'], FILTER_VALIDATE_BOOLEAN)
+                        : true;
+
+                    if ($updateCatalog) {
+                        $product->cost_price = $unitCost;
+                        if ($product->type === 'raw_material') {
+                            $product->price = $unitCost;
+                        }
+                    } else {
+                        // Incremental WAC (fast path)
+                        $this->updateWeightedAverageCost($product, $qty, $unitCost);
+                        $wacProductIds[] = $pid;
+                    }
+
+                    // Optional selling price adjustment
+                    $updateSelling = isset($row['update_selling_price'])
+                        ? filter_var($row['update_selling_price'], FILTER_VALIDATE_BOOLEAN)
+                        : false;
+
+                    if ($updateSelling) {
+                        if (!empty($row['new_selling_price']) && (float)$row['new_selling_price'] > 0) {
+                            $product->price = (float)$row['new_selling_price'];
+                        } elseif ((float)($product->target_margin ?? 0) > 0) {
+                            $product->price = $product->suggestedSellingPrice($unitCost);
+                        }
+                    }
+
+                    $product->save();
+
+                    // If raw material, sync finished goods recipe costs
+                    if ($product->type === 'raw_material') {
+                        $this->syncFinishedGoodsCostsForMaterial($product);
+                    }
                 }
 
                 StockMovement::create([
@@ -245,8 +281,10 @@ class PurchaseController extends Controller
                 );
             }
 
-            // 6) Recalc WAC from ledger for accuracy
-            $this->recalcWacForProducts($affectedIds);
+            // 6) Recalc WAC only for products where blended WAC was preferred
+            if (!empty($wacProductIds)) {
+                $this->recalcWacForProducts($wacProductIds);
+            }
 
             DB::commit();
             return redirect()->route('purchases.show', $purchase)->with('success', 'Purchase recorded successfully.');
@@ -270,11 +308,11 @@ class PurchaseController extends Controller
     public function edit(Purchase $purchase)
     {
         $suppliers = Supplier::orderBy('name')->get();
-        $products  = Product::rawMaterials()->orderBy('name')->get(['id', 'name', 'cost_price']);
+        $products  = Product::rawMaterials()->orderBy('name')->get(['id', 'name', 'type', 'cost_price', 'price', 'last_purchase_price', 'target_margin', 'unit']);
         $categories = Category::active()->forRawMaterials()->ordered()
             ->with(['products' => fn($q) => $q->rawMaterials()->orderBy('name')])
             ->get();
-        $purchase->load('items');
+        $purchase->load(['items.product']);
         $paymentChannels = PaymentChannel::where('is_active', true)->get();
         return view('purchases.edit', compact('purchase', 'suppliers', 'products', 'categories', 'paymentChannels'));
     }
@@ -349,6 +387,7 @@ class PurchaseController extends Controller
 
             // 3) Recreate items + movements
             $newIds = [];
+            $wacProductIds = [];
             foreach ($request->products as $row) {
                 $pid       = (int)$row['product_id'];
                 $qty       = (float)$row['quantity'];
@@ -364,8 +403,40 @@ class PurchaseController extends Controller
                 ]);
 
                 if ($product = Product::find($pid)) {
-                    // Incremental WAC (fast path)
-                    $this->updateWeightedAverageCost($product, $qty, $unitCost);
+                    $product->last_purchase_price = $unitCost;
+
+                    $updateCatalog = isset($row['update_catalog_cost'])
+                        ? filter_var($row['update_catalog_cost'], FILTER_VALIDATE_BOOLEAN)
+                        : true;
+
+                    if ($updateCatalog) {
+                        $product->cost_price = $unitCost;
+                        if ($product->type === 'raw_material') {
+                            $product->price = $unitCost;
+                        }
+                    } else {
+                        // Incremental WAC (fast path)
+                        $this->updateWeightedAverageCost($product, $qty, $unitCost);
+                        $wacProductIds[] = $pid;
+                    }
+
+                    $updateSelling = isset($row['update_selling_price'])
+                        ? filter_var($row['update_selling_price'], FILTER_VALIDATE_BOOLEAN)
+                        : false;
+
+                    if ($updateSelling) {
+                        if (!empty($row['new_selling_price']) && (float)$row['new_selling_price'] > 0) {
+                            $product->price = (float)$row['new_selling_price'];
+                        } elseif ((float)($product->target_margin ?? 0) > 0) {
+                            $product->price = $product->suggestedSellingPrice($unitCost);
+                        }
+                    }
+
+                    $product->save();
+
+                    if ($product->type === 'raw_material') {
+                        $this->syncFinishedGoodsCostsForMaterial($product);
+                    }
                 }
 
                 StockMovement::create([
@@ -420,8 +491,11 @@ class PurchaseController extends Controller
                 );
             }
 
-            // 7) Recalc WAC from ledger for all impacted products
-            $this->recalcWacForProducts(array_merge($prevIds, $newIds));
+            // 7) Recalc WAC from ledger for products that opted into WAC blending or removed
+            $toRecalc = array_values(array_unique(array_filter(array_merge($prevIds, $wacProductIds))));
+            if (!empty($toRecalc)) {
+                $this->recalcWacForProducts($toRecalc);
+            }
 
             DB::commit();
             return redirect()->route('purchases.show', $purchase)->with('success', 'Purchase updated successfully.');
@@ -502,6 +576,32 @@ class PurchaseController extends Controller
             $wac = (float) $p->weightedAverageCost(); // relies on movements
             $p->cost_price = round($wac, 2);
             $p->save();
+        }
+    }
+
+    /**
+     * When a raw material's purchase price changes, recalculate the recipe cost
+     * for all finished goods that depend on it.
+     */
+    protected function syncFinishedGoodsCostsForMaterial(Product $material): void
+    {
+        $recipeItems = \App\Models\ProductRecipe::where('raw_material_id', $material->id)->with('product')->get();
+        foreach ($recipeItems as $ri) {
+            $finishedProduct = $ri->product;
+            if (!$finishedProduct) continue;
+
+            $newRecipeCost = $finishedProduct->estimatedRecipeCost();
+            if ($newRecipeCost !== null) {
+                $finishedProduct->cost_price = $newRecipeCost;
+
+                if ((float)($finishedProduct->target_margin ?? 0) > 0) {
+                    $finishedProduct->price = $finishedProduct->suggestedSellingPrice($newRecipeCost);
+                }
+
+                $finishedProduct->save();
+
+                Log::info("Finished product #{$finishedProduct->id} ({$finishedProduct->name}) recipe cost recalculated to {$newRecipeCost} due to raw material #{$material->id} purchase price change.");
+            }
         }
     }
 

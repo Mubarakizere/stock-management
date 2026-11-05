@@ -21,15 +21,19 @@ class Product extends Model
         'type',
         'price',
         'cost_price',
+        'last_purchase_price',
+        'target_margin',
         'stock',
         'unit',
     ];
 
     /** Cast numeric money fields for consistency */
     protected $casts = [
-        'price'      => 'decimal:2',
-        'cost_price' => 'decimal:2',
-        'stock'      => 'decimal:2',
+        'price'               => 'decimal:2',
+        'cost_price'          => 'decimal:2',
+        'last_purchase_price' => 'decimal:2',
+        'target_margin'       => 'decimal:2',
+        'stock'               => 'decimal:2',
     ];
 
     /** Optionally expose a formatted stock string in JSON if needed */
@@ -155,5 +159,75 @@ class Product extends Model
     {
         $threshold = $threshold ?? (int) config('inventory.low_stock', 5);
         return $this->currentStock() <= $threshold;
+    }
+
+    /**
+     * Estimated manufacturing cost from Recipe (BOM) based on current raw material costs.
+     */
+    public function estimatedRecipeCost(): ?float
+    {
+        // Must have loaded or present recipe items
+        $items = $this->recipeItems()->with('rawMaterial')->get();
+        if ($items->isEmpty()) {
+            return null;
+        }
+
+        $totalCost = 0.0;
+        foreach ($items as $ri) {
+            $rm = $ri->rawMaterial;
+            if (!$rm) continue;
+
+            $unitCost = (float)($rm->cost_price ?: $rm->price ?: 0);
+            $neededBase = $ri->baseQuantityNeeded(1.0);
+            $totalCost += ($neededBase * $unitCost);
+        }
+
+        return round($totalCost, 2);
+    }
+
+    /**
+     * Effective cost price: uses cost_price if set, or falls back to recipe cost or price.
+     */
+    public function effectiveCostPrice(): float
+    {
+        if ((float)($this->cost_price ?? 0) > 0) {
+            return (float)$this->cost_price;
+        }
+
+        $recipeCost = $this->estimatedRecipeCost();
+        if ($recipeCost !== null && $recipeCost > 0) {
+            return $recipeCost;
+        }
+
+        return (float)($this->price ?? 0);
+    }
+
+    /**
+     * Suggested selling price based on cost and target profit margin %.
+     */
+    public function suggestedSellingPrice(?float $customCost = null): float
+    {
+        $cost = $customCost !== null ? $customCost : $this->effectiveCostPrice();
+        $margin = (float)($this->target_margin ?? 0);
+
+        if ($margin > 0 && $margin < 100) {
+            // Margin formula: Price = Cost / (1 - Margin/100) or Cost * (1 + Markup/100)
+            // Using standard markup calculation: Cost * (1 + Margin/100)
+            return round($cost * (1 + ($margin / 100)), 2);
+        }
+
+        return round($cost, 2);
+    }
+
+    /**
+     * Current profit margin percentage: ((Price - Cost) / Price) * 100
+     */
+    public function profitMarginPercentage(): ?float
+    {
+        $selling = (float)($this->price ?? 0);
+        if ($selling <= 0) return null;
+
+        $cost = $this->effectiveCostPrice();
+        return round((($selling - $cost) / $selling) * 100, 1);
     }
 }

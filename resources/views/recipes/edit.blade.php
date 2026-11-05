@@ -15,7 +15,7 @@
     $materialsData = $rawMaterials->map(fn($r) => [
         'id'    => $r->id,
         'name'  => $r->name,
-        'price' => (float) ($r->price ?? 0),
+        'price' => (float) ($r->cost_price ?: $r->price ?: 0),
         'unit'  => strtolower($r->unit ?: 'pcs'),
     ])->values()->toArray();
 @endphp
@@ -237,18 +237,23 @@
 
             {{-- Summary Footer --}}
             <div x-show="ingredients.length > 0"
-                 class="px-5 py-4 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm">
-                <div class="flex items-center gap-2 text-gray-600 dark:text-gray-300 text-xs sm:text-sm">
-                    <span class="inline-flex items-center gap-1">
-                        <i data-lucide="boxes" class="w-4 h-4 text-gray-400"></i>
-                        <strong x-text="ingredients.length"></strong> ingredient(s) configured
+                 class="px-5 py-4 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-sm">
+                <div class="flex items-center gap-3 text-gray-600 dark:text-gray-300 text-xs sm:text-sm">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm">
+                        <i data-lucide="boxes" class="w-4 h-4 text-orange-500"></i>
+                        <strong x-text="ingredients.length"></strong> ingredient(s)
+                    </span>
+                    <span class="text-xs text-gray-500 dark:text-gray-400">
+                        Selling Price: <strong class="text-gray-800 dark:text-gray-200">RWF {{ number_format((float)($product->price ?? 0), 2) }}</strong>
                     </span>
                 </div>
 
-                <div class="text-right">
-                    <div class="text-xs text-gray-500 dark:text-gray-400">Estimated Raw Material Cost / 1 Unit</div>
-                    <div class="text-base sm:text-lg font-bold text-gray-900 dark:text-gray-100">
-                        RWF <span x-text="estimatedCost()"></span>
+                <div class="flex items-center gap-6 sm:text-right">
+                    <div>
+                        <div class="text-[11px] uppercase tracking-wider text-gray-500 dark:text-gray-400 font-semibold">Raw Material Cost / Unit</div>
+                        <div class="text-base sm:text-lg font-black text-gray-900 dark:text-gray-100">
+                            RWF <span x-text="estimatedCost()"></span>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -179,16 +179,19 @@
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                         <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5" for="price">
-                            Price / Unit <span class="text-rose-500">*</span>
+                            Cost Price / Unit <span class="text-rose-500">*</span>
                         </label>
                         <div class="relative rounded-xl shadow-sm flex">
                             <span class="inline-flex items-center px-3 rounded-l-xl border border-r-0 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-xs font-semibold select-none">
                                 RWF
                             </span>
                             <input id="price" type="number" step="0.01" min="0" name="price"
-                                value="{{ old('price', $product->price) }}" required
+                                value="{{ old('price', $product->cost_price ?: $product->price) }}" required
                                 class="block w-full rounded-r-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 dark:focus:ring-teal-400/20 dark:focus:border-teal-400 transition py-2.5 px-3 text-sm shadow-sm">
                         </div>
+                        @if($product->last_purchase_price)
+                            <p class="text-[11px] text-teal-600 dark:text-teal-400 mt-1">Last purchase: RWF {{ number_format($product->last_purchase_price, 2) }}</p>
+                        @endif
                         @error('price')
                             <p class="text-rose-600 dark:text-rose-400 text-xs mt-1.5 flex items-center gap-1">
                                 <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
