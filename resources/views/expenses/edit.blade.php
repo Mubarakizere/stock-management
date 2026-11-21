@@ -2,199 +2,224 @@
 @section('title', "Edit Expense #{$expense->id}")
 
 @section('content')
-
-
 <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 
-    {{-- Header --}}
-    <div class="flex items-center justify-between">
-        <h1 class="text-2xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-            <i data-lucide="file-edit" class="w-6 h-6 text-indigo-600 dark:text-indigo-400"></i>
-            <span>Edit Expense #{{ $expense->id }}</span>
-        </h1>
-        <div class="flex items-center gap-2">
-            <a href="{{ route('expenses.index') }}" class="btn btn-secondary flex items-center gap-1 text-sm">
-                <i data-lucide="arrow-left" class="w-4 h-4"></i> Back
-            </a>
+    {{-- Header & Breadcrumbs --}}
+    <div class="flex items-center justify-between gap-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mb-1">
+                <a href="{{ route('expenses.index') }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition">Expenses</a>
+                <span>/</span>
+                <a href="{{ route('expenses.show', $expense) }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition">#EXP-{{ str_pad($expense->id, 5, '0', STR_PAD_LEFT) }}</a>
+                <span>/</span>
+                <span class="text-slate-700 dark:text-slate-300 font-medium">Edit</span>
+            </div>
+            <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                Edit Expense Voucher
+            </h1>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Update expenditure details for voucher <strong class="text-slate-700 dark:text-slate-300 font-mono">#EXP-{{ str_pad($expense->id, 5, '0', STR_PAD_LEFT) }}</strong>.
+            </p>
+        </div>
 
+        <div class="flex items-center gap-2">
             @can('expenses.view')
-                <a href="{{ route('expenses.show', $expense) }}" class="btn btn-outline flex items-center gap-1 text-sm">
-                    <i data-lucide="eye" class="w-4 h-4"></i> View
+                <a href="{{ route('expenses.show', $expense) }}"
+                   class="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 transition">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                    </svg>
+                    <span>View Voucher</span>
                 </a>
             @endcan
+
+            <a href="{{ route('expenses.index') }}"
+               class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition" title="Back to Ledger">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </a>
         </div>
     </div>
 
-    {{-- Permission gate --}}
-    @cannot('expenses.edit')
-        <div class="rounded-xl border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-4">
-            <div class="flex items-start gap-2">
-                <i data-lucide="shield-off" class="w-5 h-5 mt-0.5 text-amber-600 dark:text-amber-300"></i>
-                <div class="text-sm text-amber-800 dark:text-amber-100">
-                    <p class="font-semibold">You don’t have permission to edit expenses.</p>
-                    <p class="mt-1">Please contact an administrator if you believe this is a mistake.</p>
-                </div>
+    {{-- Validation Errors --}}
+    @if ($errors->any())
+        <div class="rounded-2xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/40 p-4 text-xs text-rose-800 dark:text-rose-200 space-y-1">
+            <div class="font-bold flex items-center gap-1.5 text-sm">
+                <svg class="w-4 h-4 text-rose-600 dark:text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                Please correct the following:
             </div>
+            <ul class="list-disc pl-5 space-y-0.5 pt-1">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
+    @can('expenses.edit')
+        <div class="overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-slate-900 shadow-sm">
+            <form action="{{ route('expenses.update', $expense) }}" method="POST" class="space-y-0" novalidate>
+                @csrf
+                @method('PUT')
+
+                <div class="p-6 space-y-5">
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                        Fields marked with <span class="text-rose-500 font-bold">*</span> are required.
+                    </p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {{-- Date --}}
+                        <div>
+                            <label for="date" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                Disbursement Date <span class="text-rose-500">*</span>
+                            </label>
+                            <input
+                                id="date"
+                                type="date"
+                                name="date"
+                                value="{{ old('date', optional($expense->date)->toDateString()) }}"
+                                class="w-full text-xs rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-teal-500 focus:ring-teal-500"
+                                required>
+                            @error('date')
+                                <p class="text-xs text-rose-600 dark:text-rose-400 mt-1">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        {{-- Amount --}}
+                        <div>
+                            <label for="amount" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                Amount (RWF) <span class="text-rose-500">*</span>
+                            </label>
+                            <input
+                                id="amount"
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                name="amount"
+                                value="{{ old('amount', $expense->amount) }}"
+                                class="w-full text-xs font-mono rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-teal-500 focus:ring-teal-500"
+                                required>
+                            @error('amount')
+                                <p class="text-xs text-rose-600 dark:text-rose-400 mt-1">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        {{-- Category --}}
+                        <div>
+                            <label for="category_id" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                Expense Category <span class="text-rose-500">*</span>
+                            </label>
+                            <select id="category_id" name="category_id" class="w-full text-xs rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-teal-500 focus:ring-teal-500" required>
+                                @foreach($categories as $c)
+                                    <option value="{{ $c->id }}" @selected(old('category_id', $expense->category_id) == $c->id)>
+                                        {{ $c->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('category_id')
+                                <p class="text-xs text-rose-600 dark:text-rose-400 mt-1">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        {{-- Supplier / Payee --}}
+                        <div>
+                            <label for="supplier_id" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                Vendor / Payee (Optional)
+                            </label>
+                            <select id="supplier_id" name="supplier_id" class="w-full text-xs rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-teal-500 focus:ring-teal-500">
+                                <option value="">None / General Disbursed</option>
+                                @foreach($suppliers as $s)
+                                    <option value="{{ $s->id }}" @selected(old('supplier_id', $expense->supplier_id) == $s->id)>
+                                        {{ $s->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('supplier_id')
+                                <p class="text-xs text-rose-600 dark:text-rose-400 mt-1">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        {{-- Channel / Method --}}
+                        <div>
+                            <label for="method" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                Payment Channel <span class="text-rose-500">*</span>
+                            </label>
+                            <select id="method" name="method" class="w-full text-xs rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-teal-500 focus:ring-teal-500" required>
+                                @foreach($channels as $ch)
+                                    <option value="{{ $ch->slug }}" @selected(old('method', $expense->method) == $ch->slug)>
+                                        {{ $ch->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            @error('method')
+                                <p class="text-xs text-rose-600 dark:text-rose-400 mt-1">{{ $message }}</p>
+                            @enderror
+                        </div>
+
+                        {{-- Reference --}}
+                        <div>
+                            <label for="reference" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                Reference / Receipt #
+                            </label>
+                            <input
+                                id="reference"
+                                type="text"
+                                name="reference"
+                                value="{{ old('reference', $expense->reference) }}"
+                                class="w-full text-xs font-mono rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-teal-500 focus:ring-teal-500"
+                                placeholder="Receipt / Txn ID">
+                            @error('reference')
+                                <p class="text-xs text-rose-600 dark:text-rose-400 mt-1">{{ $message }}</p>
+                            @enderror
+                        </div>
+                    </div>
+
+                    {{-- Note --}}
+                    <div>
+                        <label for="note" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                            Expense Notes & Purpose
+                        </label>
+                        <textarea
+                            id="note"
+                            name="note"
+                            rows="3"
+                            class="w-full text-xs rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-teal-500 focus:ring-teal-500">{{ old('note', $expense->note) }}</textarea>
+                        @error('note')
+                            <p class="text-xs text-rose-600 dark:text-rose-400 mt-1">{{ $message }}</p>
+                        @enderror
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                    <a href="{{ route('expenses.index') }}"
+                       class="px-4 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 transition">
+                        Cancel
+                    </a>
+
+                    <button type="submit"
+                            class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl text-white bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 shadow-sm transition">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span>Update Expense</span>
+                    </button>
+                </div>
+            </form>
         </div>
     @else
-        {{-- Alerts --}}
-        @if ($errors->any())
-            <div class="rounded-lg border border-rose-200 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/40 p-3 text-sm text-rose-800 dark:text-rose-300">
-                <p class="font-semibold mb-1">Please fix the following:</p>
-                <ul class="list-disc pl-5 space-y-0.5">
-                    @foreach ($errors->all() as $error)
-                        <li>{{ $error }}</li>
-                    @endforeach
-                </ul>
+        <div class="rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/40 p-4 text-xs text-amber-800 dark:text-amber-300">
+            <div class="font-bold flex items-center gap-1.5 text-sm">
+                <svg class="w-4 h-4 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                Permission Required
             </div>
-        @endif
-
-        @if (session('success'))
-            <div class="rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/40 p-3 text-sm text-emerald-800 dark:text-emerald-300">
-                {{ session('success') }}
-            </div>
-        @endif
-
-        {{-- Form --}}
-        <form action="{{ route('expenses.update', $expense) }}"
-              method="POST"
-              class="space-y-5 rounded-2xl ring-1 ring-gray-200 dark:ring-gray-800 bg-white dark:bg-gray-900 p-6">
-            @csrf
-            @method('PUT')
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {{-- Date --}}
-                <div>
-                    <label class="form-label" for="date">Date <span class="text-red-500">*</span></label>
-                    <input
-                        id="date"
-                        type="date"
-                        name="date"
-                        value="{{ old('date', optional($expense->date)->toDateString()) }}"
-                        class="form-input w-full"
-                        required>
-                    @error('date')
-                        <p class="text-xs text-red-600 dark:text-red-400 mt-1">{{ $message }}</p>
-                    @enderror
-                </div>
-
-                {{-- Amount --}}
-                <div>
-                    <label class="form-label" for="amount">Amount (RWF) <span class="text-red-500">*</span></label>
-                    <input
-                        id="amount"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        name="amount"
-                        value="{{ old('amount', $expense->amount) }}"
-                        class="form-input w-full"
-                        required>
-                    @error('amount')
-                        <p class="text-xs text-red-600 dark:text-red-400 mt-1">{{ $message }}</p>
-                    @enderror
-                </div>
-
-                {{-- Category --}}
-                <div>
-                    <label class="form-label" for="category_id">Category <span class="text-red-500">*</span></label>
-                    <select id="category_id" name="category_id" class="form-select w-full" required>
-                        @foreach($categories as $c)
-                            <option value="{{ $c->id }}"
-                                @selected(old('category_id', $expense->category_id) == $c->id)>
-                                {{ $c->name }}
-                            </option>
-                        @endforeach
-                    </select>
-                    @error('category_id')
-                        <p class="text-xs text-red-600 dark:text-red-400 mt-1">{{ $message }}</p>
-                    @enderror
-                </div>
-
-                {{-- Supplier --}}
-                <div>
-                    <label class="form-label" for="supplier_id">Supplier (optional)</label>
-                    <select id="supplier_id" name="supplier_id" class="form-select w-full">
-                        <option value="">None</option>
-                        @foreach($suppliers as $s)
-                            <option value="{{ $s->id }}"
-                                @selected(old('supplier_id', $expense->supplier_id) == $s->id)>
-                                {{ $s->name }}
-                            </option>
-                        @endforeach
-                    </select>
-                    @error('supplier_id')
-                        <p class="text-xs text-red-600 dark:text-red-400 mt-1">{{ $message }}</p>
-                    @enderror
-                </div>
-
-                {{-- Method --}}
-                <div>
-                    <label class="form-label" for="method">Method <span class="text-red-500">*</span></label>
-                    <select id="method" name="method" class="form-select w-full" required>
-                        @foreach($channels as $ch)
-                            <option value="{{ $ch->slug }}"
-                                @selected(old('method', $expense->method) == $ch->slug)>
-                                {{ $ch->name }}
-                            </option>
-                        @endforeach
-                    </select>
-                    @error('method')
-                        <p class="text-xs text-red-600 dark:text-red-400 mt-1">{{ $message }}</p>
-                    @enderror
-                </div>
-
-                {{-- Reference --}}
-                <div>
-                    <label class="form-label" for="reference">Reference (optional)</label>
-                    <input
-                        id="reference"
-                        type="text"
-                        name="reference"
-                        value="{{ old('reference', $expense->reference) }}"
-                        class="form-input w-full"
-                        placeholder="Receipt / Txn ID">
-                    @error('reference')
-                        <p class="text-xs text-red-600 dark:text-red-400 mt-1">{{ $message }}</p>
-                    @enderror
-                </div>
-            </div>
-
-            {{-- Note --}}
-            <div>
-                <label class="form-label" for="note">Note</label>
-                <textarea
-                    id="note"
-                    name="note"
-                    rows="3"
-                    class="form-textarea w-full"
-                    placeholder="Details…">{{ old('note', $expense->note) }}</textarea>
-                @error('note')
-                    <p class="text-xs text-red-600 dark:text-red-400 mt-1">{{ $message }}</p>
-                @enderror
-            </div>
-
-            <div class="flex items-center justify-end gap-2">
-                <a href="{{ route('expenses.index') }}" class="btn btn-outline">
-                    Cancel
-                </a>
-                <button class="btn btn-primary flex items-center gap-1">
-                    <i data-lucide="save" class="w-4 h-4"></i>
-                    Save Changes
-                </button>
-            </div>
-        </form>
-    @endcannot
+            <p class="mt-1">You do not have permission to edit expenses. Please contact your system administrator.</p>
+        </div>
+    @endcan
 </div>
 @endsection
-
-@push('scripts')
-<script src="https://unpkg.com/lucide@latest"></script>
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    if (window.lucide) {
-        lucide.createIcons();
-    }
-});
-</script>
-@endpush

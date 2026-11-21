@@ -76,11 +76,28 @@ class CategoryController extends Controller
         $categories = $query->paginate($perPage)->appends($request->query());
     }
 
+    $stats = [
+        'total'        => Category::count(),
+        'product'      => Category::whereIn('kind', ['product', 'both'])->count(),
+        'raw_material' => Category::where('kind', 'raw_material')->count(),
+        'expense'      => Category::whereIn('kind', ['expense', 'both'])->count(),
+        'inactive'     => Category::where('is_active', false)->count(),
+        'trash'        => Category::onlyTrashed()->count(),
+    ];
+
     Log::debug('Categories.index.result', $this->ctx($request, [
         'returned' => $categories instanceof \Illuminate\Pagination\LengthAwarePaginator ? $categories->count() : count($categories),
     ]));
 
-    return view('categories.index', compact('categories','filterKind'));
+    if ($request->ajax() && !$request->wantsJson()) {
+        return view('categories._table', compact('categories', 'filterKind'))->render();
+    }
+
+    if ($request->wantsJson()) {
+        return response()->json(compact('categories', 'stats', 'filterKind'));
+    }
+
+    return view('categories.index', compact('categories', 'filterKind', 'stats'));
 }
 
 /** Restore a soft-deleted category */

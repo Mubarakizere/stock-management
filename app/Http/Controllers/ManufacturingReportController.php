@@ -110,7 +110,7 @@ class ManufacturingReportController extends Controller
         $rmOutCount   = $rawMaterialsStock->where('out', true)->count();
         $rmLowCount   = $rawMaterialsStock->where('low', true)->count();
 
-        return view('reports.manufacturing', [
+        $viewData = [
             'start' => $start->toDateString(),
             'end'   => $end->toDateString(),
 
@@ -130,6 +130,12 @@ class ManufacturingReportController extends Controller
             'totalFpValue'            => $totalFpValue,
             'rmOutCount'              => $rmOutCount,
             'rmLowCount'              => $rmLowCount,
-        ]);
+        ];
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json($viewData);
+        }
+
+        return view('reports.manufacturing', $viewData);
     }
 }

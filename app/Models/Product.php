@@ -12,6 +12,9 @@ class Product extends Model
 {
     use HasFactory;
 
+    public const TYPE_PRODUCT = 'product';
+    public const TYPE_RAW_MATERIAL = 'raw_material';
+
     /**
      * Mass-assignable fields.
      */
@@ -161,12 +164,29 @@ class Product extends Model
         return $this->currentStock() <= $threshold;
     }
 
+    /** Production batches of this finished product */
+    public function batches(): HasMany
+    {
+        return $this->hasMany(Production::class, 'product_id')->latest('produced_at');
+    }
+
+    /** Active non-expired production batches */
+    public function activeBatches(): HasMany
+    {
+        return $this->hasMany(Production::class, 'product_id')
+            ->where(function ($q) {
+                $q->whereNull('expiry_date')
+                  ->orWhere('expiry_date', '>=', now()->toDateString());
+            })
+            ->latest('produced_at');
+    }
+
     /**
      * Estimated manufacturing cost from Recipe (BOM) based on current raw material costs.
+     * Supports $basis: 'wac' (Weighted Average Cost) or 'latest_po' (Latest PO / Purchase Price).
      */
-    public function estimatedRecipeCost(): ?float
+    public function estimatedRecipeCost(string $basis = 'wac'): ?float
     {
-        // Must have loaded or present recipe items
         $items = $this->recipeItems()->with('rawMaterial')->get();
         if ($items->isEmpty()) {
             return null;
@@ -177,12 +197,186 @@ class Product extends Model
             $rm = $ri->rawMaterial;
             if (!$rm) continue;
 
-            $unitCost = (float)($rm->cost_price ?: $rm->price ?: 0);
+            if ($basis === 'latest_po') {
+                $unitCost = (float)($rm->last_purchase_price ?: $rm->cost_price ?: $rm->price ?: 0);
+            } else {
+                // Default: WAC
+                $wac = $rm->weightedAverageCost();
+                $unitCost = $wac > 0 ? $wac : (float)($rm->cost_price ?: $rm->price ?: 0);
+            }
+
             $neededBase = $ri->baseQuantityNeeded(1.0);
             $totalCost += ($neededBase * $unitCost);
         }
 
         return round($totalCost, 2);
+    }
+
+    /**
+     * Dynamic BOM Cost with basis: 'wac' (Weighted Average Cost) or 'latest_po' (Latest Purchase Order Price).
+     */
+    public function bomCost(string $basis = 'wac'): float
+    {
+        return $this->estimatedRecipeCost($basis) ?? (float)($this->cost_price ?? $this->price ?? 0);
+    }
+
+    /**
+     * Detailed ingredient-by-ingredient BOM Cost Breakdown.
+     * Shows recipe qty, base units needed, unit cost, line cost, and % contribution to total batch cost.
+     */
+    public function bomCostBreakdown(string $basis = 'wac'): array
+    {
+        $items = $this->recipeItems()->with('rawMaterial')->get();
+        if ($items->isEmpty()) {
+            return [];
+        }
+
+        $totalBom = $this->bomCost($basis);
+        $breakdown = [];
+
+        foreach ($items as $ri) {
+            $rm = $ri->rawMaterial;
+            if (!$rm) continue;
+
+            if ($basis === 'latest_po') {
+                $unitCost = (float)($rm->last_purchase_price ?: $rm->cost_price ?: $rm->price ?: 0);
+            } else {
+                $wac = $rm->weightedAverageCost();
+                $unitCost = $wac > 0 ? $wac : (float)($rm->cost_price ?: $rm->price ?: 0);
+            }
+
+            $neededBase = $ri->baseQuantityNeeded(1.0);
+            $lineCost   = round($neededBase * $unitCost, 2);
+            $pctShare   = ($totalBom > 0) ? round(($lineCost / $totalBom) * 100, 1) : 0.0;
+
+            $breakdown[] = [
+                'raw_material_id'   => $rm->id,
+                'name'              => $rm->name,
+                'recipe_quantity'   => (float)$ri->quantity,
+                'recipe_unit'       => $ri->unit ?: ($rm->unit ?: 'pcs'),
+                'base_quantity'     => $neededBase,
+                'base_unit'         => $rm->unit ?: 'pcs',
+                'unit_cost'         => $unitCost,
+                'line_cost'         => $lineCost,
+                'pct_share'         => $pctShare,
+                'in_stock'          => $rm->currentStock(),
+            ];
+        }
+
+        return $breakdown;
+    }
+
+    /**
+     * Margin Guard Status:
+     * Evaluates whether the product's current selling price meets or violates the target margin threshold.
+     */
+    public function marginGuardStatus(string $basis = 'wac'): array
+    {
+        $bomCost = $this->bomCost($basis);
+        $sellingPrice = (float)($this->price ?? 0);
+        $targetMargin = (float)($this->target_margin ?: 25.0);
+
+        $grossProfit = $sellingPrice - $bomCost;
+        $marginPct = ($sellingPrice > 0) ? round(($grossProfit / $sellingPrice) * 100, 1) : 0.0;
+
+        // Suggested price to achieve target margin: Cost / (1 - Margin/100)
+        $suggestedPrice = ($targetMargin < 100) ? round($bomCost / (1 - ($targetMargin / 100)), 2) : $bomCost;
+
+        $deficitPct = round($targetMargin - $marginPct, 1);
+
+        if ($marginPct < ($targetMargin / 2) || $grossProfit <= 0) {
+            $status = 'critical';
+            $badge = [
+                'label' => "Critical Margin Alert: {$marginPct}% (Target: {$targetMargin}%)",
+                'class' => 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/50',
+                'dot'   => 'bg-rose-500 animate-ping',
+            ];
+        } elseif ($marginPct < $targetMargin) {
+            $status = 'warning';
+            $badge = [
+                'label' => "Margin Warning: {$marginPct}% < {$targetMargin}%",
+                'class' => 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50',
+                'dot'   => 'bg-amber-500',
+            ];
+        } else {
+            $status = 'healthy';
+            $badge = [
+                'label' => "Healthy Margin: {$marginPct}%",
+                'class' => 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/50',
+                'dot'   => 'bg-emerald-500',
+            ];
+        }
+
+        return [
+            'bom_cost'        => $bomCost,
+            'selling_price'   => $sellingPrice,
+            'gross_profit'    => round($grossProfit, 2),
+            'margin_pct'      => $marginPct,
+            'target_margin'   => $targetMargin,
+            'deficit_pct'     => $deficitPct,
+            'suggested_price' => $suggestedPrice,
+            'status'          => $status,
+            'badge'           => $badge,
+        ];
+    }
+
+    /**
+     * Synchronize computed BOM cost to product cost_price.
+     * Optionally adjust selling price to match target margin if $autoAdjustPrice is true.
+     */
+    public function syncBomCostToCostPrice(bool $autoAdjustPrice = false, string $basis = 'wac'): array
+    {
+        $newCost = $this->estimatedRecipeCost($basis);
+        if ($newCost === null) {
+            return ['synced' => false, 'message' => 'No recipe configured for this product.'];
+        }
+
+        $oldCost = (float)($this->cost_price ?? 0);
+        $this->cost_price = $newCost;
+
+        $oldPrice = (float)($this->price ?? 0);
+        $priceChanged = false;
+
+        if ($autoAdjustPrice) {
+            $targetMargin = (float)($this->target_margin ?: 25.0);
+            if ($targetMargin > 0 && $targetMargin < 100) {
+                $this->price = round($newCost / (1 - ($targetMargin / 100)), 2);
+                $priceChanged = true;
+            }
+        }
+
+        $this->save();
+
+        return [
+            'synced'        => true,
+            'old_cost'      => $oldCost,
+            'new_cost'      => $newCost,
+            'old_price'     => $oldPrice,
+            'new_price'     => (float)$this->price,
+            'price_changed' => $priceChanged,
+        ];
+    }
+
+    /**
+     * Synchronize all finished goods whose recipes consume a given raw material.
+     */
+    public static function syncAffectedFinishedGoods(int $rawMaterialId, bool $autoAdjustPrice = false): array
+    {
+        $recipes = ProductRecipe::where('raw_material_id', $rawMaterialId)->get();
+        $affected = [];
+
+        foreach ($recipes as $r) {
+            $product = $r->product;
+            if ($product) {
+                $res = $product->syncBomCostToCostPrice($autoAdjustPrice);
+                $affected[$product->id] = [
+                    'product_name' => $product->name,
+                    'result'       => $res,
+                ];
+            }
+        }
+
+        return $affected;
     }
 
     /**

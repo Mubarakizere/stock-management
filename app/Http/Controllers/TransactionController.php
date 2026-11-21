@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Transaction;
 use App\Models\Customer;
 use App\Models\Supplier;
+use App\Models\PaymentChannel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{Auth, DB, Log};
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -25,7 +26,7 @@ class TransactionController extends Controller
         try {
             // Base query with relations + text search
             $base = Transaction::query()
-                ->with(['user','customer','supplier','sale','purchase'])
+                ->with(['user', 'customer', 'supplier', 'sale', 'purchase'])
                 ->when($request->filled('type'),        fn($q) => $q->where('type', $request->type))
                 ->when($request->filled('customer_id'), fn($q) => $q->where('customer_id', $request->customer_id))
                 ->when($request->filled('supplier_id'), fn($q) => $q->where('supplier_id', $request->supplier_id))
@@ -58,8 +59,10 @@ class TransactionController extends Controller
             }
 
             // Filter-aware totals
-            $totalCredits = (clone $base)->where('type', 'credit')->sum('amount');
-            $totalDebits  = (clone $base)->where('type', 'debit')->sum('amount');
+            $totalCredits = (float) (clone $base)->where('type', 'credit')->sum('amount');
+            $totalDebits  = (float) (clone $base)->where('type', 'debit')->sum('amount');
+            $netBalance   = $totalCredits - $totalDebits;
+            $totalCount   = (int) (clone $base)->count();
 
             // Page data
             $transactions = $query
@@ -68,25 +71,55 @@ class TransactionController extends Controller
                 ->paginate(15)
                 ->withQueryString();
 
-            $pageCredits = $transactions->getCollection()->where('type','credit')->sum('amount');
-            $pageDebits  = $transactions->getCollection()->where('type','debit')->sum('amount');
+            $hasRunning = optional($transactions->first())->running_balance !== null;
+            $pageCredits = (float) $transactions->getCollection()->where('type', 'credit')->sum('amount');
+            $pageDebits  = (float) $transactions->getCollection()->where('type', 'debit')->sum('amount');
 
             // --- Channel Balances (All Time) ---
-            $channels = \App\Models\PaymentChannel::where('is_active', true)->orderBy('name')->get();
+            $channels = PaymentChannel::where('is_active', true)->orderBy('name')->get();
             $channelBalances = [];
-            foreach($channels as $ch) {
-                // We use raw queries for speed on large datasets, but Eloquent is fine for now
-                $in  = Transaction::where('method', $ch->slug)->where('type', 'credit')->sum('amount');
-                $out = Transaction::where('method', $ch->slug)->where('type', 'debit')->sum('amount');
-                $channelBalances[$ch->name] = $in - $out;
+            foreach ($channels as $ch) {
+                $in  = (float) Transaction::where('method', $ch->slug)->where('type', 'credit')->sum('amount');
+                $out = (float) Transaction::where('method', $ch->slug)->where('type', 'debit')->sum('amount');
+                $channelBalances[$ch->name] = [
+                    'slug'    => $ch->slug,
+                    'balance' => $in - $out,
+                    'in'      => $in,
+                    'out'     => $out,
+                ];
+            }
+
+            $customers = Customer::select('id', 'name')->orderBy('name')->get();
+            $suppliers = Supplier::select('id', 'name')->orderBy('name')->get();
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'html'       => view('transactions._table', compact('transactions', 'hasRunning'))->render(),
+                    'pagination' => (string) $transactions->links(),
+                    'total'      => $transactions->total(),
+                    'credits'    => $totalCredits,
+                    'debits'     => $totalDebits,
+                    'net'        => $netBalance,
+                ]);
             }
 
             return view('transactions.index', compact(
-                'transactions','totalCredits','totalDebits','pageCredits','pageDebits','channelBalances'
+                'transactions',
+                'hasRunning',
+                'totalCredits',
+                'totalDebits',
+                'netBalance',
+                'totalCount',
+                'pageCredits',
+                'pageDebits',
+                'channelBalances',
+                'channels',
+                'customers',
+                'suppliers'
             ));
         } catch (Throwable $e) {
             Log::error('Transactions@index failed', ['rid' => $rid, 'error' => $e->getMessage()]);
-            return back()->with('error', 'Failed to load transactions. Ref: '.$rid);
+            return back()->with('error', 'Failed to load transactions. Ref: ' . $rid);
         }
     }
 
@@ -96,10 +129,10 @@ class TransactionController extends Controller
     public function create()
     {
         try {
-            $customers = Customer::select('id','name')->orderBy('name')->get();
-            $suppliers = Supplier::select('id','name')->orderBy('name')->get();
-            $channels  = \App\Models\PaymentChannel::where('is_active', true)->orderBy('name')->get();
-            return view('transactions.create', compact('customers','suppliers','channels'));
+            $customers = Customer::select('id', 'name')->orderBy('name')->get();
+            $suppliers = Supplier::select('id', 'name')->orderBy('name')->get();
+            $channels  = PaymentChannel::where('is_active', true)->orderBy('name')->get();
+            return view('transactions.create', compact('customers', 'suppliers', 'channels'));
         } catch (Throwable $e) {
             Log::error('Transactions@create failed', ['error' => $e->getMessage()]);
             return back()->with('error', 'Failed to open create form.');
@@ -121,14 +154,28 @@ class TransactionController extends Controller
             ]);
 
             $validated['user_id'] = Auth::id();
-            Transaction::create($validated);
+            $tx = Transaction::create($validated);
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success'     => true,
+                    'message'     => 'Transaction recorded successfully.',
+                    'transaction' => $tx->load(['user', 'customer', 'supplier']),
+                ], 201);
+            }
 
             return redirect()->route('transactions.index')->with('success', 'Transaction added successfully.');
         } catch (ValidationException $ve) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'errors' => $ve->errors()], 422);
+            }
             throw $ve;
         } catch (Throwable $e) {
             Log::error('Transactions@store failed', ['rid' => $rid, 'error' => $e->getMessage()]);
-            return back()->withInput()->with('error', 'Failed to save transaction. Ref: '.$rid);
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Failed to save transaction.'], 500);
+            }
+            return back()->withInput()->with('error', 'Failed to save transaction. Ref: ' . $rid);
         }
     }
 
@@ -138,7 +185,7 @@ class TransactionController extends Controller
     public function show(Transaction $transaction)
     {
         try {
-            $transaction->load(['user','customer','supplier','sale','purchase']);
+            $transaction->load(['user', 'customer', 'supplier', 'sale', 'purchase', 'loan']);
             return view('transactions.show', compact('transaction'));
         } catch (Throwable $e) {
             Log::error('Transactions@show failed', ['id' => $transaction->id, 'error' => $e->getMessage()]);
@@ -146,13 +193,22 @@ class TransactionController extends Controller
         }
     }
 
-    public function edit(Transaction $transaction)
+    public function edit(Request $request, Transaction $transaction)
     {
         try {
-            $customers = Customer::select('id','name')->orderBy('name')->get();
-            $suppliers = Supplier::select('id','name')->orderBy('name')->get();
-            $channels  = \App\Models\PaymentChannel::where('is_active', true)->orderBy('name')->get();
-            return view('transactions.edit', compact('transaction','customers','suppliers','channels'));
+            $transaction->load(['customer', 'supplier']);
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success'     => true,
+                    'transaction' => $transaction,
+                ]);
+            }
+
+            $customers = Customer::select('id', 'name')->orderBy('name')->get();
+            $suppliers = Supplier::select('id', 'name')->orderBy('name')->get();
+            $channels  = PaymentChannel::where('is_active', true)->orderBy('name')->get();
+            return view('transactions.edit', compact('transaction', 'customers', 'suppliers', 'channels'));
         } catch (Throwable $e) {
             Log::error('Transactions@edit failed', ['id' => $transaction->id, 'error' => $e->getMessage()]);
             return back()->with('error', 'Failed to open edit form.');
@@ -175,65 +231,52 @@ class TransactionController extends Controller
 
             $transaction->update($validated);
 
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success'     => true,
+                    'message'     => 'Transaction updated successfully.',
+                    'transaction' => $transaction->load(['user', 'customer', 'supplier']),
+                ]);
+            }
+
             return redirect()->route('transactions.index')->with('success', 'Transaction updated successfully.');
         } catch (ValidationException $ve) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'errors' => $ve->errors()], 422);
+            }
             throw $ve;
-    } catch (Throwable $e) {
+        } catch (Throwable $e) {
             Log::error('Transactions@update failed', ['rid' => $rid, 'id' => $transaction->id, 'error' => $e->getMessage()]);
-            return back()->withInput()->with('error', 'Failed to update transaction. Ref: '.$rid);
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Failed to update transaction.'], 500);
+            }
+            return back()->withInput()->with('error', 'Failed to update transaction. Ref: ' . $rid);
         }
     }
 
     /* =========================
      |  DESTROY
      |=========================*/
-    public function destroy(Transaction $transaction)
+    public function destroy(Request $request, Transaction $transaction)
     {
         $rid = uniqid('tx_destroy_');
         try {
             $transaction->delete();
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Transaction deleted successfully.'
+                ]);
+            }
+
             return redirect()->route('transactions.index')->with('success', 'Transaction deleted successfully.');
         } catch (Throwable $e) {
             Log::error('Transactions@destroy failed', ['rid' => $rid, 'id' => $transaction->id, 'error' => $e->getMessage()]);
-            return back()->with('error', 'Failed to delete transaction. Ref: '.$rid);
-        }
-    }
-
-    /**
-     * Helper for filters
-     */
-    protected function applyFilters($query, Request $request)
-    {
-        $isPg = DB::getDriverName() === 'pgsql';
-        $like = $isPg ? 'ilike' : 'like';
-
-        if ($request->filled('type')) {
-            $query->where('type', $request->type);
-        }
-        if ($request->filled('method')) {
-            $query->where('method', $request->method);
-        }
-        if ($request->filled('customer_id')) {
-            $query->where('customer_id', $request->customer_id);
-        }
-        if ($request->filled('supplier_id')) {
-            $query->where('supplier_id', $request->supplier_id);
-        }
-        if ($request->filled('date_from')) {
-            $query->whereDate('transaction_date', '>=', $request->date_from);
-        }
-        if ($request->filled('date_to')) {
-            $query->whereDate('transaction_date', '<=', $request->date_to);
-        }
-        if ($request->filled('q')) {
-            $term = trim($request->q);
-            $query->where(function($sub) use ($term, $like) {
-                $sub->where('notes', $like, "%{$term}%")
-                    ->orWhere('method', $like, "%{$term}%")
-                    ->orWhereHas('user', fn($u) => $u->where('name', $like, "%{$term}%"))
-                    ->orWhereHas('customer', fn($c) => $c->where('name', $like, "%{$term}%"))
-                    ->orWhereHas('supplier', fn($s) => $s->where('name', $like, "%{$term}%"));
-            });
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Failed to delete transaction.'], 500);
+            }
+            return back()->with('error', 'Failed to delete transaction. Ref: ' . $rid);
         }
     }
 
@@ -248,7 +291,7 @@ class TransactionController extends Controller
 
         try {
             $base = Transaction::query()
-                ->with(['user','customer','supplier'])
+                ->with(['user', 'customer', 'supplier'])
                 ->when($request->filled('type'),        fn($q) => $q->where('type', $request->type))
                 ->when($request->filled('customer_id'), fn($q) => $q->where('customer_id', $request->customer_id))
                 ->when($request->filled('supplier_id'), fn($q) => $q->where('supplier_id', $request->supplier_id))
@@ -282,7 +325,7 @@ class TransactionController extends Controller
             $fullpath = $path . DIRECTORY_SEPARATOR . $filename;
 
             $handle = fopen($fullpath, 'w+');
-            fputcsv($handle, ['Date','Type','Amount','Method','User','Customer','Supplier','Notes']);
+            fputcsv($handle, ['Date', 'Type', 'Amount', 'Method', 'User', 'Customer', 'Supplier', 'Notes']);
             foreach ($transactions as $t) {
                 fputcsv($handle, [
                     $t->transaction_date,
@@ -300,7 +343,7 @@ class TransactionController extends Controller
             return response()->download($fullpath)->deleteFileAfterSend(true);
         } catch (Throwable $e) {
             Log::error('Transactions@exportCsv failed', ['rid' => $rid, 'error' => $e->getMessage()]);
-            return back()->with('error', 'Failed to export CSV. Ref: '.$rid);
+            return back()->with('error', 'Failed to export CSV. Ref: ' . $rid);
         }
     }
 
@@ -312,7 +355,7 @@ class TransactionController extends Controller
 
         try {
             $base = Transaction::query()
-                ->with(['user','customer','supplier'])
+                ->with(['user', 'customer', 'supplier'])
                 ->when($request->filled('type'),        fn($q) => $q->where('type', $request->type))
                 ->when($request->filled('customer_id'), fn($q) => $q->where('customer_id', $request->customer_id))
                 ->when($request->filled('supplier_id'), fn($q) => $q->where('supplier_id', $request->supplier_id))
@@ -341,9 +384,9 @@ class TransactionController extends Controller
                 ->get();
 
             // --- Channel Balances (All Time) ---
-            $channels = \App\Models\PaymentChannel::where('is_active', true)->orderBy('name')->get();
+            $channels = PaymentChannel::where('is_active', true)->orderBy('name')->get();
             $channelBalances = [];
-            foreach($channels as $ch) {
+            foreach ($channels as $ch) {
                 $in  = Transaction::where('method', $ch->slug)->where('type', 'credit')->sum('amount');
                 $out = Transaction::where('method', $ch->slug)->where('type', 'debit')->sum('amount');
                 $channelBalances[$ch->name] = $in - $out;
@@ -354,7 +397,7 @@ class TransactionController extends Controller
             return $pdf->download($name);
         } catch (Throwable $e) {
             Log::error('Transactions@exportPdf failed', ['rid' => $rid, 'error' => $e->getMessage()]);
-            return back()->with('error', 'Failed to export PDF. Ref: '.$rid);
+            return back()->with('error', 'Failed to export PDF. Ref: ' . $rid);
         }
     }
 
@@ -364,7 +407,7 @@ class TransactionController extends Controller
     public function withdrawal()
     {
         try {
-            $channels = \App\Models\PaymentChannel::where('is_active', true)->orderBy('name')->get();
+            $channels = PaymentChannel::where('is_active', true)->orderBy('name')->get();
             return view('transactions.withdrawal', compact('channels'));
         } catch (Throwable $e) {
             Log::error('Transactions@withdrawal failed', ['error' => $e->getMessage()]);
@@ -383,7 +426,7 @@ class TransactionController extends Controller
                 'notes'            => 'nullable|string|max:1000',
             ]);
 
-            Transaction::create([
+            $tx = Transaction::create([
                 'type'             => 'debit',
                 'amount'           => $validated['amount'],
                 'transaction_date' => $validated['transaction_date'],
@@ -392,12 +435,26 @@ class TransactionController extends Controller
                 'user_id'          => Auth::id(),
             ]);
 
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success'     => true,
+                    'message'     => 'Withdrawal recorded successfully.',
+                    'transaction' => $tx,
+                ]);
+            }
+
             return redirect()->route('transactions.index')->with('success', 'Withdrawal recorded successfully.');
         } catch (ValidationException $ve) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'errors' => $ve->errors()], 422);
+            }
             throw $ve;
         } catch (Throwable $e) {
             Log::error('Transactions@storeWithdrawal failed', ['rid' => $rid, 'error' => $e->getMessage()]);
-            return back()->withInput()->with('error', 'Failed to record withdrawal. Ref: '.$rid);
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Failed to record withdrawal.'], 500);
+            }
+            return back()->withInput()->with('error', 'Failed to record withdrawal. Ref: ' . $rid);
         }
     }
 
@@ -407,7 +464,7 @@ class TransactionController extends Controller
     public function transfer()
     {
         try {
-            $channels = \App\Models\PaymentChannel::where('is_active', true)->orderBy('name')->get();
+            $channels = PaymentChannel::where('is_active', true)->orderBy('name')->get();
             return view('transactions.transfer', compact('channels'));
         } catch (Throwable $e) {
             Log::error('Transactions@transfer failed', ['error' => $e->getMessage()]);
@@ -449,12 +506,25 @@ class TransactionController extends Controller
                 ]);
             });
 
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Internal transfer completed successfully.',
+                ]);
+            }
+
             return redirect()->route('transactions.index')->with('success', 'Transfer recorded successfully.');
         } catch (ValidationException $ve) {
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'errors' => $ve->errors()], 422);
+            }
             throw $ve;
         } catch (Throwable $e) {
             Log::error('Transactions@storeTransfer failed', ['rid' => $rid, 'error' => $e->getMessage()]);
-            return back()->withInput()->with('error', 'Failed to record transfer. Ref: '.$rid);
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Failed to record transfer.'], 500);
+            }
+            return back()->withInput()->with('error', 'Failed to record transfer. Ref: ' . $rid);
         }
     }
 }

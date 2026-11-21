@@ -15,9 +15,19 @@ class Customer extends Model
         'phone',
         'address',
     ];
-    public function transactions()
+
+    public function sales()
     {
-    return $this->hasMany(Transaction::class);
+        return $this->hasMany(Sale::class);
     }
 
+    public function loans()
+    {
+        return $this->hasMany(Loan::class);
+    }
+
+    public function transactions()
+    {
+        return $this->hasMany(Transaction::class);
+    }
 }

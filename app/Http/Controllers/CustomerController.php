@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Models\Sale;
+use App\Models\Loan;
 use Illuminate\Http\Request;
 
 class CustomerController extends Controller
@@ -11,7 +13,9 @@ class CustomerController extends Controller
     {
         $query = trim($request->get('q', ''));
 
-        $customersQuery = Customer::query();
+        $customersQuery = Customer::query()
+            ->withCount('sales')
+            ->withSum('sales as total_spent', 'total_amount');
 
         if ($query !== '') {
             $customersQuery->where(function ($qB) use ($query) {
@@ -28,12 +32,58 @@ class CustomerController extends Controller
             ->withQueryString();
 
         $totalCustomers = Customer::count();
+        $activeCustomers = Customer::has('sales')->count();
+        $totalRevenue = (float) Sale::whereNotNull('customer_id')->sum('total_amount');
+
+        // Total outstanding receivables from customer loans
+        $pendingLoans = Loan::where('type', 'given')
+            ->where('status', 'pending')
+            ->whereNotNull('customer_id')
+            ->with('payments')
+            ->get();
+        $totalReceivables = (float) $pendingLoans->sum('remaining');
 
         return view('customers.index', [
-            'customers'      => $customers,
-            'query'          => $query,
-            'totalCustomers' => $totalCustomers,
+            'customers'        => $customers,
+            'query'            => $query,
+            'totalCustomers'   => $totalCustomers,
+            'activeCustomers'  => $activeCustomers,
+            'totalRevenue'     => $totalRevenue,
+            'totalReceivables' => $totalReceivables,
         ]);
+    }
+
+    public function show(Customer $customer)
+    {
+        $customer->loadMissing([
+            'sales' => fn($q) => $q->latest()->take(10),
+            'loans' => fn($q) => $q->with('payments')->latest(),
+        ]);
+
+        $totalOrders = (int) $customer->sales()->count();
+        $totalSpent  = (float) $customer->sales()->sum('total_amount');
+        $totalPaid   = (float) $customer->sales()->sum('amount_paid');
+
+        // Customer's given pending loans
+        $customerLoans = $customer->loans()
+            ->where('type', 'given')
+            ->where('status', 'pending')
+            ->with('payments')
+            ->get();
+        $outstandingCredit = (float) $customerLoans->sum('remaining');
+
+        $avgOrderValue = $totalOrders > 0 ? ($totalSpent / $totalOrders) : 0;
+        $lastSale = $customer->sales()->latest()->first();
+
+        return view('customers.show', compact(
+            'customer',
+            'totalOrders',
+            'totalSpent',
+            'totalPaid',
+            'outstandingCredit',
+            'avgOrderValue',
+            'lastSale'
+        ));
     }
 
     public function create()
@@ -50,11 +100,11 @@ class CustomerController extends Controller
             'address' => 'nullable|string',
         ]);
 
-        Customer::create($data);
+        $customer = Customer::create($data);
 
         return redirect()
-            ->route('customers.index')
-            ->with('success', 'Customer created successfully.');
+            ->route('customers.show', $customer)
+            ->with('success', 'Customer account created successfully.');
     }
 
     public function edit(Customer $customer)
@@ -74,16 +124,17 @@ class CustomerController extends Controller
         $customer->update($data);
 
         return redirect()
-            ->route('customers.index')
-            ->with('success', 'Customer updated successfully.');
+            ->route('customers.show', $customer)
+            ->with('success', 'Customer details updated successfully.');
     }
 
     public function destroy(Customer $customer)
     {
+        $name = $customer->name;
         $customer->delete();
 
         return redirect()
             ->route('customers.index')
-            ->with('success', 'Customer deleted successfully.');
+            ->with('success', "Customer '{$name}' has been deleted successfully. Historical ledger entries were retained as unassigned.");
     }
 }

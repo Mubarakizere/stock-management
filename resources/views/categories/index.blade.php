@@ -1,393 +1,407 @@
-{{-- resources/views/categories/index.blade.php --}}
 @extends('layouts.app')
-@section('title', 'Categories')
+@section('title', 'Categories Management')
 
 @section('content')
 @php
-    // Tabs
     $kinds = [
-        'all'          => 'All',
-        'product'      => 'Product',
-        'expense'      => 'Expense',
-        'raw_material' => 'Raw Material',
-        'both'         => 'Both',
+        'all'          => 'All Categories',
+        'product'      => 'Finished Products',
+        'raw_material' => 'Raw Materials',
+        'expense'      => 'Operating Expenses',
+        'both'         => 'Universal (Both)',
         'inactive'     => 'Inactive',
-        'trash'        => 'Trash',
+        'trash'        => 'Trash Archive',
     ];
 
-    $current     = $filterKind ?? request('kind'); // 'product'|'expense'|'both'|'inactive'|'trash'|null
+    $current     = $filterKind ?? request('kind');
     $isTrashView = ($current === 'trash');
-    $tabClass = function($key) use ($current) {
-        $active = ($current === $key) || ($key === 'all' && ! $current);
-        return $active
-            ? 'bg-indigo-600 text-white'
-            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700';
-    };
-
-    // Pills / helpers
-    $pill = fn($active) => $active
-        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-        : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400';
-
-    $q        = trim((string) request('q', ''));
-    $showAll  = request('per_page') === 'all';
+    $q           = trim((string) request('q', ''));
+    $showAll     = request('per_page') === 'all';
     $toggleParams = array_merge(request()->except('page','per_page'), ['per_page' => $showAll ? null : 'all']);
     $toggleHref   = route('categories.index', array_filter($toggleParams, fn($v) => $v !== null));
-
-    // Permissions for actions column
-    $user = auth()->user();
-    $canEdit   = $user?->can('categories.edit');
-    $canDelete = $user?->can('categories.delete');
-    $canManage = $canEdit || $canDelete;
-
-    // Column count for empty state
-    $baseCols = $isTrashView ? 9 : 8; // with Actions
-    $emptyColspan = $canManage ? $baseCols : $baseCols - 1;
 @endphp
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+<div x-data="{
+        confirmOpen: false,
+        confirmMsg: '',
+        targetForm: null,
+        openConfirmModal(form, message) {
+            this.targetForm = form;
+            this.confirmMsg = message || 'Are you sure you want to proceed?';
+            this.confirmOpen = true;
+        },
+        executeConfirm() {
+            if (this.targetForm) {
+                this.targetForm.submit();
+            }
+            this.confirmOpen = false;
+        }
+     }"
+     @keydown.escape.window="confirmOpen = false"
+     class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
 
-    {{-- Flash / errors --}}
-    @if (session('success'))
-        <div class="rounded-md bg-emerald-50 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200 px-3 py-2 text-sm">
-            {{ session('success') }}
+    {{-- ========================================================================= --}}
+    {{-- 1. HEADER & TOP ACTIONS                                                   --}}
+    {{-- ========================================================================= --}}
+    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">
+                <span>Inventory &amp; Operations</span>
+                <span>/</span>
+                <span>Master Data</span>
+                <span>/</span>
+                <span>Categories</span>
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5">
+                <div class="p-2 rounded-2xl bg-indigo-600 text-white shadow-md shadow-indigo-600/30">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                    </svg>
+                </div>
+                <span>Categories &amp; Taxonomies</span>
+            </h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+                Organize finished inventory, manufacturing raw materials, and ledger expense items into hierarchical groups.
+            </p>
         </div>
-    @endif
 
-    @if (session('error'))
-        <div class="rounded-md bg-rose-50 dark:bg-rose-900/30 text-rose-800 dark:text-rose-200 px-3 py-2 text-sm">
-            {{ session('error') }}
+        {{-- Action Buttons --}}
+        <div class="flex flex-wrap items-center gap-2.5">
+            <a href="{{ route('products.index') }}"
+               class="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/60 shadow-xs transition">
+                <svg class="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+                <span>Products Catalog</span>
+            </a>
+
+            <a href="{{ route('raw-materials.index') }}"
+               class="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/60 shadow-xs transition">
+                <svg class="w-4 h-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                </svg>
+                <span>Raw Materials</span>
+            </a>
+
+            @can('categories.create')
+                <a href="{{ route('categories.create') }}"
+                   class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:scale-95 shadow-md shadow-indigo-500/20 transition cursor-pointer">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    <span>Add Category</span>
+                </a>
+            @endcan
         </div>
-    @endif
+    </div>
 
-    @if ($errors->any())
-        <div class="rounded-md bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 px-3 py-2 text-sm">
-            <strong>{{ $errors->count() }} error(s):</strong>
-            <ul class="list-disc ml-5">
-                @foreach ($errors->all() as $err)
-                    <li>{{ $err }}</li>
-                @endforeach
-            </ul>
+    {{-- ========================================================================= --}}
+    {{-- 2. METRICS & STATS DECK                                                   --}}
+    {{-- ========================================================================= --}}
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {{-- Total Active Categories --}}
+        <div class="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs relative overflow-hidden group">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Active Groups</span>
+                <div class="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                    </svg>
+                </div>
+            </div>
+            <div class="mt-3">
+                <div class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+                    {{ $stats['total'] ?? 0 }}
+                </div>
+                <div class="flex items-center gap-1.5 mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    <span class="font-semibold text-indigo-600 dark:text-indigo-400">Master Taxonomies</span>
+                    <span>in live use</span>
+                </div>
+            </div>
+            <div class="absolute bottom-0 inset-x-0 h-1 bg-gradient-to-r from-indigo-500 to-blue-600"></div>
         </div>
-    @endif
 
-    {{-- Header --}}
-    <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-        <div class="flex items-center gap-2">
-            <i data-lucide="folder-tree" class="w-6 h-6 text-indigo-600 dark:text-indigo-400"></i>
-            <h1 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">Categories</h1>
+        {{-- Product Categories --}}
+        <div class="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs relative overflow-hidden group">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Finished Products</span>
+                <div class="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                </div>
+            </div>
+            <div class="mt-3">
+                <div class="text-2xl font-black text-blue-600 dark:text-blue-400 tracking-tight">
+                    {{ $stats['product'] ?? 0 }}
+                </div>
+                <div class="flex items-center gap-1.5 mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    <span class="font-semibold text-blue-600 dark:text-blue-400">Catalog Lines</span>
+                    <span>retail &amp; wholesale goods</span>
+                </div>
+            </div>
+            <div class="absolute bottom-0 inset-x-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
         </div>
 
-        <div class="flex items-center gap-2">
-            {{-- Search --}}
-            <form method="GET" action="{{ route('categories.index') }}" class="hidden sm:block">
-                {{-- Preserve other params except page & q --}}
-                @foreach(request()->except('page','q') as $key => $val)
-                    @if(is_array($val))
-                        @foreach($val as $v)
-                            <input type="hidden" name="{{ $key }}[]" value="{{ $v }}">
-                        @endforeach
-                    @else
-                        <input type="hidden" name="{{ $key }}" value="{{ $val }}">
-                    @endif
-                @endforeach
+        {{-- Raw Material Categories --}}
+        <div class="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs relative overflow-hidden group">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Raw Material Tiers</span>
+                <div class="p-2 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                    </svg>
+                </div>
+            </div>
+            <div class="mt-3">
+                <div class="text-2xl font-black text-purple-600 dark:text-purple-400 tracking-tight">
+                    {{ $stats['raw_material'] ?? 0 }}
+                </div>
+                <div class="flex items-center gap-1.5 mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    <span class="font-semibold text-purple-600 dark:text-purple-400">Production Stock</span>
+                    <span>ingredients &amp; inputs</span>
+                </div>
+            </div>
+            <div class="absolute bottom-0 inset-x-0 h-1 bg-gradient-to-r from-purple-500 to-pink-600"></div>
+        </div>
 
-                <div class="relative">
-                    <input
-                        type="text"
-                        name="q"
-                        value="{{ $q }}"
-                        placeholder="Search by name, code, description, or parent…"
-                        class="pl-9 pr-24 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                    <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-2.5 top-2.5"></i>
+        {{-- Operating Expenses --}}
+        <div class="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs relative overflow-hidden group">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Expense Classifications</span>
+                <div class="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 group-hover:scale-110 transition-transform">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                </div>
+            </div>
+            <div class="mt-3">
+                <div class="text-2xl font-black text-amber-600 dark:text-amber-400 tracking-tight">
+                    {{ $stats['expense'] ?? 0 }}
+                </div>
+                <div class="flex items-center gap-1.5 mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    <span class="font-semibold text-amber-600 dark:text-amber-400">Overhead Accounts</span>
+                    <span>utilities, rent &amp; logistics</span>
+                </div>
+            </div>
+            <div class="absolute bottom-0 inset-x-0 h-1 bg-gradient-to-r from-amber-500 to-orange-500"></div>
+        </div>
+    </div>
 
-                    <div class="absolute right-1 top-1 flex items-center gap-1">
-                        @if($q !== '')
-                            @php $clearParams = array_filter(array_merge(request()->except('page','q'))); @endphp
-                            <a href="{{ route('categories.index', $clearParams) }}"
-                               class="px-2 py-1 text-xs rounded-md bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700">
-                                Clear
-                            </a>
+    {{-- ========================================================================= --}}
+    {{-- 3. INTERACTIVE TABS & SEARCH TOOLBAR                                      --}}
+    {{-- ========================================================================= --}}
+    <div class="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
+        {{-- Fast Classification Tabs --}}
+        <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-slate-800/80">
+            <div class="flex flex-wrap items-center gap-1.5">
+                @foreach($kinds as $key => $label)
+                    @php
+                        $target = $key === 'all' ? null : $key;
+                        $params = array_filter(array_merge(request()->except('page'), ['kind' => $target]));
+                        $isActive = ($current === $key) || ($key === 'all' && empty($current));
+                        $isTrashTab = ($key === 'trash');
+                        $trashCount = $stats['trash'] ?? 0;
+                    @endphp
+                    <a href="{{ route('categories.index', $params) }}"
+                       class="px-3 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 {{ $isActive ? ($isTrashTab ? 'bg-rose-600 text-white shadow-xs' : 'bg-indigo-600 text-white shadow-xs') : ($isTrashTab ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 hover:bg-rose-100' : 'bg-slate-100 text-slate-600 dark:bg-slate-700/60 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700') }}">
+                        <span>{{ $label }}</span>
+                        @if($isTrashTab && $trashCount > 0)
+                            <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold {{ $isActive ? 'bg-white text-rose-600' : 'bg-rose-600 text-white' }}">
+                                {{ $trashCount }}
+                            </span>
                         @endif
-                        <button type="submit"
-                                class="px-2 py-1 text-xs rounded-md bg-indigo-600 text-white hover:bg-indigo-700">
-                            Go
-                        </button>
+                    </a>
+                @endforeach
+            </div>
+
+            <div class="flex items-center gap-2">
+                <a href="{{ $toggleHref }}"
+                   class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 transition">
+                    @if($showAll)
+                        <svg class="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                        <span>Paginate</span>
+                    @else
+                        <svg class="w-3.5 h-3.5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        <span>Show All</span>
+                    @endif
+                </a>
+            </div>
+        </div>
+
+        {{-- Search Input Form --}}
+        <form method="GET" action="{{ route('categories.index') }}" class="grid grid-cols-1 md:grid-cols-12 gap-3.5 items-end">
+            {{-- Preserve active filters --}}
+            @if($current)
+                <input type="hidden" name="kind" value="{{ $current }}">
+            @endif
+            @if($showAll)
+                <input type="hidden" name="per_page" value="all">
+            @endif
+
+            <div class="md:col-span-10">
+                <label for="q" class="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">
+                    Search Categories
+                </label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
+                    <input type="text" name="q" id="q" value="{{ $q }}"
+                           placeholder="Search category name, code (e.g. BEER), description, or parent group..."
+                           class="w-full pl-10 pr-10 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition">
+
+                    @if($q !== '')
+                        @php
+                            $clearParams = array_filter(request()->except('page','q'));
+                        @endphp
+                        <a href="{{ route('categories.index', $clearParams) }}"
+                           class="absolute inset-y-0 right-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                           title="Clear search">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </a>
+                    @endif
+                </div>
+            </div>
+
+            <div class="md:col-span-2 flex items-center gap-2">
+                <button type="submit"
+                        class="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-sm font-semibold flex items-center justify-center gap-1.5 shadow-md shadow-indigo-600/20 transition cursor-pointer">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <span>Filter</span>
+                </button>
+
+                @if($q !== '')
+                    <a href="{{ route('categories.index', array_filter(request()->except('page','q'))) }}"
+                       class="py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-sm font-semibold flex items-center justify-center transition"
+                       title="Reset Filters">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    </a>
+                @endif
+            </div>
+        </form>
+
+        {{-- Search & Tab Context indicator --}}
+        <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400 pt-1">
+            @if($q !== '')
+                <div>Searching: <span class="font-bold text-slate-900 dark:text-white">“{{ $q }}”</span></div>
+            @endif
+            @if($isTrashView)
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300">
+                    Trash Archive — soft-deleted categories
+                </span>
+            @endif
+            @if($showAll)
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300">
+                    Showing unpaginated list
+                </span>
+            @endif
+        </div>
+    </div>
+
+    {{-- ========================================================================= --}}
+    {{-- 4. CATEGORIES TABLE                                                       --}}
+    {{-- ========================================================================= --}}
+    <div class="bg-white dark:bg-slate-800/90 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5">
+                <div class="p-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="text-base font-bold text-slate-900 dark:text-white">Active Classification Records</h2>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Category hierarchical taxonomy and item allocations</p>
+                </div>
+            </div>
+
+            <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300">
+                {{ $categories instanceof \Illuminate\Pagination\LengthAwarePaginator ? $categories->total() : count($categories) }} Categories
+            </span>
+        </div>
+
+        @include('categories._table')
+
+        @if($categories instanceof \Illuminate\Pagination\LengthAwarePaginator && $categories->hasPages())
+            <div class="px-5 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40">
+                {{ $categories->links() }}
+            </div>
+        @endif
+    </div>
+
+    {{-- ========================================================================= --}}
+    {{-- 5. CONFIRMATION ACTION MODAL (ALPINE.JS)                                   --}}
+    {{-- ========================================================================= --}}
+    <div x-show="confirmOpen" x-cloak
+         class="fixed inset-0 z-50 overflow-y-auto"
+         aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div x-show="confirmOpen"
+                 x-transition:enter="ease-out duration-300"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+                 x-transition:leave="ease-in duration-200"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 @click="confirmOpen = false"
+                 class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
+                 aria-hidden="true"></div>
+
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+            <div x-show="confirmOpen"
+                 x-transition:enter="ease-out duration-300"
+                 x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                 x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+                 x-transition:leave="ease-in duration-200"
+                 x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
+                 x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                 class="inline-block align-bottom bg-white dark:bg-slate-800 rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full border border-slate-200 dark:border-slate-700">
+                <div class="p-6">
+                    <div class="flex items-start gap-4">
+                        <div class="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                        </div>
+                        <div class="space-y-1.5">
+                            <h3 class="text-lg font-bold text-slate-900 dark:text-white" id="modal-title">
+                                Confirm Category Action
+                            </h3>
+                            <p class="text-sm text-slate-500 dark:text-slate-400" x-text="confirmMsg"></p>
+                        </div>
                     </div>
                 </div>
-            </form>
 
-            {{-- Show All / Paginate toggle --}}
-            <a href="{{ $toggleHref }}"
-               class="btn btn-outline text-xs">
-                @if($showAll)
-                    <i data-lucide="list" class="w-4 h-4"></i> Paginate
-                @else
-                    <i data-lucide="list-check" class="w-4 h-4"></i> Show All
-                @endif
-            </a>
+                <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-end gap-2.5">
+                    <button type="button"
+                            @click="confirmOpen = false"
+                            class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition">
+                        Cancel
+                    </button>
 
-            {{-- Add --}}
-            @unless($isTrashView)
-                @can('categories.create')
-                    <a href="{{ route('categories.create') }}"
-                       class="btn btn-primary flex items-center gap-1 text-sm">
-                        <i data-lucide="plus" class="w-4 h-4"></i> Add Category
-                    </a>
-                @endcan
-            @endunless
+                    <button type="button"
+                            @click="executeConfirm()"
+                            class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 active:scale-95 shadow-md shadow-rose-600/20 transition cursor-pointer">
+                        Confirm Action
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
-    {{-- Tabs / Filters --}}
-    <div class="flex flex-wrap gap-2">
-        @foreach($kinds as $key => $label)
-            @php
-                $target = $key === 'all' ? null : $key;
-                $params = array_filter(array_merge(request()->except('page'), ['kind' => $target]));
-            @endphp
-            <a href="{{ route('categories.index', $params) }}"
-               class="px-3 py-1.5 rounded-lg text-xs font-semibold transition {{ $tabClass($key) }}">
-                {{ $label }}
-            </a>
-        @endforeach
-    </div>
-
-    {{-- Small recaps --}}
-    <div class="flex flex-wrap items-center gap-3 text-xs">
-        @if($q !== '')
-            <div class="text-gray-500 dark:text-gray-400">
-                Searching for <span class="font-medium text-gray-700 dark:text-gray-200">“{{ $q }}”</span>
-            </div>
-        @endif
-        @if($isTrashView)
-            <div class="px-2 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200">
-                Trash view — restore or delete forever
-            </div>
-        @endif
-        @if($showAll)
-            <div class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200">
-                Showing all results
-            </div>
-        @endif
-    </div>
-
-    {{-- Table --}}
-    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="min-w-[1100px] w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-                <thead class="bg-gray-50 dark:bg-gray-900/40 text-gray-700 dark:text-gray-300 uppercase text-xs font-semibold">
-                    <tr>
-                        <th class="px-4 py-3 text-left">ID</th>
-                        <th class="px-4 py-3 text-left">Name</th>
-                        <th class="px-4 py-3 text-left">Kind</th>
-                        <th class="px-4 py-3 text-left">Parent</th>
-                        <th class="px-4 py-3 text-center">Active</th>
-                        @if($isTrashView)
-                            <th class="px-4 py-3 text-left">Deleted</th>
-                        @endif
-                        <th class="px-4 py-3 text-left">Description</th>
-                        <th class="px-4 py-3 text-right">Usage</th>
-                        @if($canManage)
-                            <th class="px-4 py-3 text-right">Actions</th>
-                        @endif
-                    </tr>
-                </thead>
-
-                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                    @forelse ($categories as $category)
-                        @php $dot = $category->color ?: '#6b7280'; @endphp
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/30 transition">
-                            <td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ $category->id }}</td>
-
-                            {{-- Name + code chip --}}
-                            <td class="px-4 py-3 text-gray-800 dark:text-gray-100 font-medium">
-                                <span class="inline-flex items-center gap-1.5">
-                                    <span class="inline-block w-2.5 h-2.5 rounded-full" style="background: {{ $dot }}"></span>
-                                    @if($category->icon)
-                                        <i data-lucide="{{ $category->icon }}" class="w-4 h-4 text-gray-500 dark:text-gray-400"></i>
-                                    @endif
-                                    {{ $category->name }}
-                                    @if($category->code)
-                                        <span class="ml-1 text-[11px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
-                                            {{ $category->code }}
-                                        </span>
-                                    @endif
-                                </span>
-                            </td>
-
-                            <td class="px-4 py-3 text-gray-700 dark:text-gray-300 capitalize">{{ $category->kind }}</td>
-                            <td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ optional($category->parent)->name ?? '—' }}</td>
-
-                            <td class="px-4 py-3 text-center">
-                                <span class="px-2 py-0.5 rounded text-xs font-semibold {{ $pill($category->is_active) }}">
-                                    {{ $category->is_active ? 'Active' : 'Inactive' }}
-                                </span>
-                            </td>
-
-                            @if($isTrashView)
-                                <td class="px-4 py-3 text-gray-500 dark:text-gray-400">
-                                    {{ optional($category->deleted_at)->format('d M Y, H:i') ?? '—' }}
-                                </td>
-                            @endif
-
-                            <td class="px-4 py-3 text-gray-600 dark:text-gray-400">
-                                {{ $category->description ?? '—' }}
-                            </td>
-
-                            {{-- Usage counts --}}
-                            <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
-                                <span class="inline-flex items-center gap-1 mr-2">
-                                    <i data-lucide="package" class="w-4 h-4 text-gray-400"></i>
-                                    <span class="font-semibold">{{ $category->products_count ?? 0 }}</span>
-                                </span>
-                                <span class="inline-flex items-center gap-1">
-                                    <i data-lucide="wallet" class="w-4 h-4 text-gray-400"></i>
-                                    <span class="font-semibold">{{ $category->expenses_count ?? 0 }}</span>
-                                </span>
-                            </td>
-
-                            {{-- Actions --}}
-                            @if($canManage)
-                                <td class="px-4 py-3 text-right whitespace-nowrap space-x-1">
-                                    @if($isTrashView)
-                                        @can('categories.delete')
-                                            {{-- Restore --}}
-                                            <form action="{{ route('categories.restore', $category->id) }}"
-                                                  method="POST"
-                                                  class="inline">
-                                                @csrf
-                                                <button type="submit"
-                                                        class="btn btn-success text-xs inline-flex items-center gap-1">
-                                                    <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Restore
-                                                </button>
-                                            </form>
-
-                                            {{-- Delete Forever --}}
-                                            <form action="{{ route('categories.forceDestroy', $category->id) }}"
-                                                  method="POST"
-                                                  class="inline">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="button"
-                                                        class="btn btn-danger text-xs inline-flex items-center gap-1"
-                                                        @click="$store.confirm.openWith($el.closest('form'))">
-                                                    <i data-lucide="skull" class="w-4 h-4"></i> Delete Forever
-                                                </button>
-                                            </form>
-                                        @endcan
-                                    @else
-                                        @can('categories.edit')
-                                            <a href="{{ route('categories.edit', $category) }}"
-                                               class="btn btn-outline text-xs inline-flex items-center gap-1">
-                                                <i data-lucide="edit-3" class="w-4 h-4"></i> Edit
-                                            </a>
-                                        @endcan
-
-                                        @can('categories.delete')
-                                            <form action="{{ route('categories.destroy', $category) }}"
-                                                  method="POST"
-                                                  class="inline">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="button"
-                                                        class="btn btn-danger text-xs inline-flex items-center gap-1"
-                                                        @click="$store.confirm.openWith($el.closest('form'))">
-                                                    <i data-lucide="trash-2" class="w-4 h-4"></i> Delete
-                                                </button>
-                                            </form>
-                                        @endcan
-                                    @endif
-                                </td>
-                            @endif
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="{{ $emptyColspan }}"
-                                class="px-4 py-6 text-center text-gray-500 dark:text-gray-400 text-sm">
-                                @if($q !== '')
-                                    No results for “{{ $q }}”.
-                                @else
-                                    No categories found.
-                                @endif
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-
-        {{-- Pagination --}}
-        @if($categories instanceof \Illuminate\Pagination\LengthAwarePaginator)
-            <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40">
-                {{ $categories->withQueryString()->links() }}
-            </div>
-        @endif
-    </div>
 </div>
-
-{{-- Global Confirm Modal (delete / force delete) --}}
-@can('categories.delete')
-<div x-data
-     x-show="$store.confirm.open"
-     x-cloak
-     class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-     @keydown.escape.window="$store.confirm.close()"
-     x-transition>
-    <div @click.outside="$store.confirm.close()"
-         class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl p-6 w-full max-w-md">
-        <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">Confirm Action</h2>
-        <p class="text-gray-600 dark:text-gray-300 text-sm mb-6">
-            Are you sure you want to proceed? This action cannot be undone.
-        </p>
-        <div class="flex justify-end gap-3">
-            <button type="button"
-                    class="btn btn-outline"
-                    @click="$store.confirm.close()">
-                Cancel
-            </button>
-            <button type="button"
-                    class="btn btn-danger"
-                    @click="$store.confirm.confirm()">
-                Confirm
-            </button>
-        </div>
-    </div>
-</div>
-@endcan
-
-@push('scripts')
-<script src="https://unpkg.com/lucide@latest"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-        if (window.lucide && typeof window.lucide.createIcons === 'function') {
-            window.lucide.createIcons();
-        }
-    });
-
-    document.addEventListener('alpine:init', () => {
-        if (! Alpine.store('confirm')) {
-            Alpine.store('confirm', {
-                open: false,
-                submitEl: null,
-                openWith(form) {
-                    this.submitEl = form;
-                    this.open = true;
-                },
-                close() {
-                    this.open = false;
-                    this.submitEl = null;
-                },
-                confirm() {
-                    if (this.submitEl) {
-                        this.submitEl.submit();
-                    }
-                    this.close();
-                },
-            });
-        }
-    });
-</script>
-@endpush
 @endsection

@@ -3,269 +3,286 @@
 
 @section('content')
 @php
+    use App\Models\Category;
+
     $usableCategories = collect($categories ?? [])
-        ->filter(fn($c) => ($c->is_active ?? true) && ($c->kind ?? '') === 'raw_material')
+        ->filter(fn($c) => ($c->is_active ?? true) && in_array($c->kind ?? '', ['raw_material', 'both']))
         ->values();
+
+    $unitFamilies = $unitFamilies ?? \App\Services\UnitService::getGrouped();
 @endphp
 
-<div class="max-w-xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6"
+     x-data="{
+        price: {{ old('price') ? (float)old('price') : 0 }},
+        stock: {{ old('stock') ? (float)old('stock') : 0 }},
+        unit: '{{ old('unit', 'kg') }}',
 
-    {{-- Header --}}
-    <div class="flex items-center justify-between pb-1">
-        <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800/80 flex items-center justify-center text-teal-600 dark:text-teal-400 shadow-sm shrink-0">
-                <i data-lucide="flask-conical" class="w-5 h-5"></i>
+        get initialValue() {
+            return (parseFloat(this.price) || 0) * (parseFloat(this.stock) || 0);
+        },
+
+        formatMoney(num) {
+            return (parseFloat(num) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+     }">
+
+    {{-- Breadcrumb & Title --}}
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-slate-200/80 dark:border-slate-800">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                <a href="{{ route('raw-materials.index') }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition">Raw Materials</a>
+                <span>/</span>
+                <span class="text-slate-900 dark:text-white font-semibold">New Raw Material</span>
             </div>
-            <div>
-                <h1 class="text-xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">
-                    Add Raw Material
-                </h1>
-                <p class="text-xs text-gray-500 dark:text-gray-400">
-                    Create a new raw material for inventory, purchases, and recipes.
-                </p>
-            </div>
+            <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white mt-1">
+                Add Raw Material
+            </h1>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Register a new production ingredient, packaging material, or consumable component.
+            </p>
         </div>
 
-        <a href="{{ route('raw-materials.index') }}"
-           class="btn btn-outline text-xs sm:text-sm flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition shadow-sm">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i>
-            <span>Back</span>
-        </a>
+        <div class="flex items-center gap-2">
+            <a href="{{ route('raw-materials.index') }}"
+               class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200/90 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700/80 shadow-sm transition">
+                <svg class="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+                Cancel
+            </a>
+        </div>
     </div>
 
-    @cannot('products.create')
-        <div class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-5">
-            <div class="flex items-start gap-3">
-                <i data-lucide="shield-alert" class="w-5 h-5 text-amber-500 mt-0.5 shrink-0"></i>
-                <div>
-                    <h2 class="text-sm font-semibold text-amber-800 dark:text-amber-200">
-                        Permission Required
-                    </h2>
-                    <p class="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
-                        You do not have permission to add raw materials.
-                    </p>
-                </div>
+    {{-- Error Banner --}}
+    @if (($errors ?? null)?->any())
+        <div class="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-xs text-rose-700 dark:text-rose-300 space-y-1 shadow-sm">
+            <div class="font-bold flex items-center gap-1.5">
+                <svg class="w-4 h-4 text-rose-600 dark:text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <span>Please correct the errors below:</span>
+            </div>
+            <ul class="list-disc pl-5 space-y-0.5">
+                @foreach ($errors->all() as $err)
+                    <li>{{ $err }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
+    @if($usableCategories->isEmpty())
+        <div class="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-3 shadow-sm">
+            <div class="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/60 text-amber-600 flex items-center justify-center shrink-0">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+            </div>
+            <div class="space-y-1">
+                <div class="font-bold">No active Raw Material categories found</div>
+                <p>Create an active category assigned to Raw Materials before cataloging new items.</p>
+                @can('categories.create')
+                    <div class="pt-1">
+                        <a href="{{ route('categories.create', ['kind' => 'raw_material']) }}" class="inline-flex items-center gap-1 font-semibold text-teal-600 dark:text-teal-400 hover:underline">
+                            + Create Raw Material Category →
+                        </a>
+                    </div>
+                @endcan
             </div>
         </div>
-    @else
+    @endif
 
-        @if ($errors->any())
-            <div class="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/80 text-rose-700 dark:text-rose-300 rounded-2xl p-4 text-sm shadow-sm">
-                <div class="flex items-center gap-2 font-medium">
-                    <i data-lucide="alert-circle" class="w-4 h-4 text-rose-600 dark:text-rose-400"></i>
-                    <span>Please fix the following:</span>
-                </div>
-                <ul class="list-disc pl-5 mt-2 space-y-1 text-xs">
-                    @foreach ($errors->all() as $error)
-                        <li>{{ $error }}</li>
-                    @endforeach
-                </ul>
-            </div>
-        @endif
+    <form action="{{ route('raw-materials.store') }}" method="POST" class="space-y-6">
+        @csrf
 
-        @if($usableCategories->isEmpty())
-            <div class="rounded-2xl border border-amber-200 dark:border-amber-800/80 bg-amber-50/70 dark:bg-amber-950/30 p-4 shadow-sm">
-                <div class="flex items-start gap-3">
-                    <div class="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
-                        <i data-lucide="alert-triangle" class="w-4 h-4"></i>
-                    </div>
-                    <div class="text-sm">
-                        <h3 class="font-semibold text-amber-900 dark:text-amber-200">No raw material categories found</h3>
-                        <p class="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
-                            Create an active category with kind <em>Raw Material</em> before creating items.
-                        </p>
-                        @can('categories.create')
-                            <a href="{{ route('categories.create', ['kind'=>'raw_material']) }}"
-                               class="inline-flex items-center gap-1.5 mt-2.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-600 hover:bg-amber-700 text-white transition shadow-sm">
-                                <i data-lucide="folder-plus" class="w-3.5 h-3.5"></i>
-                                <span>Create Category</span>
-                            </a>
-                        @endcan
-                    </div>
-                </div>
-            </div>
-        @endif
-
-        <div class="bg-white dark:bg-gray-800 border border-gray-200/80 dark:border-gray-700/80 rounded-2xl shadow-sm p-6 sm:p-7">
-            <form action="{{ route('raw-materials.store') }}" method="POST" class="space-y-5">
-                @csrf
-
-                {{-- Name --}}
+        {{-- Card 1: Material Identification --}}
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-6 shadow-sm space-y-5">
+            <div class="flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <span class="w-7 h-7 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold text-xs">
+                    1
+                </span>
                 <div>
-                    <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5" for="name">
+                    <h2 class="text-sm font-bold text-slate-900 dark:text-white">Material Identification</h2>
+                    <p class="text-xs text-slate-400">Basic naming, category attribution, and measurement unit</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                {{-- Material Name --}}
+                <div class="sm:col-span-2">
+                    <label for="name" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                         Material Name <span class="text-rose-500">*</span>
                     </label>
-                    <div class="relative rounded-xl shadow-sm">
-                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400 dark:text-gray-500">
-                            <i data-lucide="tag" class="w-4 h-4"></i>
-                        </div>
-                        <input id="name" type="text" name="name" value="{{ old('name') }}" required autofocus
-                            class="block w-full pl-10 pr-3.5 py-2.5 text-sm rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 dark:focus:ring-teal-400/20 dark:focus:border-teal-400 transition shadow-sm"
-                            placeholder="e.g. Wheat Flour 50kg, Sugar, Cocoa Powder">
-                    </div>
-                    @error('name')
-                        <p class="text-rose-600 dark:text-rose-400 text-xs mt-1.5 flex items-center gap-1">
-                            <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
-                            <span>{{ $message }}</span>
-                        </p>
-                    @enderror
+                    <input type="text"
+                           id="name"
+                           name="name"
+                           value="{{ old('name') }}"
+                           required
+                           autofocus
+                           placeholder="e.g. Premium Wheat Flour 50kg, Refined Sugar, Glass Bottles 500ml"
+                           class="w-full py-2.5 px-3.5 text-xs rounded-xl border border-slate-200/90 dark:border-slate-700/80 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
                 </div>
 
                 {{-- Category --}}
                 <div>
                     <div class="flex items-center justify-between mb-1.5">
-                        <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300" for="category_id">
+                        <label for="category_id" class="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                             Category <span class="text-rose-500">*</span>
                         </label>
                         @can('categories.create')
                             <a href="{{ route('categories.create', ['kind' => 'raw_material']) }}"
-                               class="text-[11px] font-medium text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 hover:underline flex items-center gap-1">
-                                <i data-lucide="plus" class="w-3 h-3"></i>
-                                <span>New Category</span>
+                               class="text-[11px] font-medium text-teal-600 dark:text-teal-400 hover:underline">
+                                + New Category
                             </a>
                         @endcan
                     </div>
-                    <div class="relative rounded-xl shadow-sm">
-                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400 dark:text-gray-500">
-                            <i data-lucide="folder" class="w-4 h-4"></i>
-                        </div>
-                        <select id="category_id" name="category_id" required
-                            class="block w-full pl-10 pr-10 py-2.5 text-sm rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 dark:focus:ring-teal-400/20 dark:focus:border-teal-400 transition shadow-sm">
-                            <option value="" disabled {{ old('category_id') ? '' : 'selected' }}>Select category</option>
-                            @foreach ($usableCategories as $category)
-                                <option value="{{ $category->id }}" {{ old('category_id') == $category->id ? 'selected' : '' }}>
-                                    {{ $category->name }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1.5">
-                        Only categories configured for <span class="font-medium text-gray-700 dark:text-gray-300">Raw Material</span> are shown.
-                    </p>
-                    @error('category_id')
-                        <p class="text-rose-600 dark:text-rose-400 text-xs mt-1.5 flex items-center gap-1">
-                            <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
-                            <span>{{ $message }}</span>
-                        </p>
-                    @enderror
+                    <select id="category_id"
+                            name="category_id"
+                            required
+                            class="w-full py-2.5 px-3 text-xs rounded-xl border border-slate-200/90 dark:border-slate-700/80 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
+                        <option value="" disabled {{ old('category_id') ? '' : 'selected' }}>Select raw material category</option>
+                        @foreach ($usableCategories as $cat)
+                            <option value="{{ $cat->id }}" {{ (string)old('category_id') === (string)$cat->id ? 'selected' : '' }}>
+                                {{ $cat->name }}
+                            </option>
+                        @endforeach
+                    </select>
                 </div>
 
-                {{-- Price, Initial Stock & Base Unit --}}
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {{-- Price --}}
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5" for="price">
-                            Price / Unit <span class="text-rose-500">*</span>
-                        </label>
-                        <div class="relative rounded-xl shadow-sm flex">
-                            <span class="inline-flex items-center px-3 rounded-l-xl border border-r-0 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-xs font-semibold select-none">
-                                RWF
-                            </span>
-                            <input id="price" type="number" step="0.01" min="0" name="price"
-                                value="{{ old('price') }}" required
-                                class="block w-full rounded-r-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 dark:focus:ring-teal-400/20 dark:focus:border-teal-400 transition py-2.5 px-3 text-sm shadow-sm"
-                                placeholder="0.00">
-                        </div>
-                        @error('price')
-                            <p class="text-rose-600 dark:text-rose-400 text-xs mt-1.5 flex items-center gap-1">
-                                <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
-                                <span>{{ $message }}</span>
-                            </p>
-                        @enderror
-                    </div>
-
-                    {{-- Base Unit --}}
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5" for="unit">
-                            Base Unit <span class="text-rose-500">*</span>
-                        </label>
-                        <div class="relative rounded-xl shadow-sm">
-                            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400 dark:text-gray-500">
-                                <i data-lucide="scale" class="w-4 h-4"></i>
-                            </div>
-                            <select id="unit" name="unit" required
-                                class="block w-full pl-10 pr-8 py-2.5 text-sm rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 dark:focus:ring-teal-400/20 dark:focus:border-teal-400 transition shadow-sm">
-                                <optgroup label="Weight">
-                                    <option value="kg" {{ old('unit', 'kg') === 'kg' ? 'selected' : '' }}>Kilogram (kg)</option>
-                                    <option value="g" {{ old('unit') === 'g' ? 'selected' : '' }}>Gram (g)</option>
-                                    <option value="mg" {{ old('unit') === 'mg' ? 'selected' : '' }}>Milligram (mg)</option>
-                                </optgroup>
-                                <optgroup label="Volume">
-                                    <option value="l" {{ old('unit') === 'l' ? 'selected' : '' }}>Liter (L)</option>
-                                    <option value="ml" {{ old('unit') === 'ml' ? 'selected' : '' }}>Milliliter (ml)</option>
-                                    <option value="cl" {{ old('unit') === 'cl' ? 'selected' : '' }}>Centiliter (cl)</option>
-                                </optgroup>
-                                <optgroup label="Count / Containers">
-                                    <option value="pcs" {{ old('unit') === 'pcs' ? 'selected' : '' }}>Piece (pcs)</option>
-                                    <option value="bottle" {{ old('unit') === 'bottle' ? 'selected' : '' }}>Bottle</option>
-                                    <option value="can" {{ old('unit') === 'can' ? 'selected' : '' }}>Can</option>
-                                    <option value="cap" {{ old('unit') === 'cap' ? 'selected' : '' }}>Cap / Lid</option>
-                                    <option value="box" {{ old('unit') === 'box' ? 'selected' : '' }}>Box</option>
-                                    <option value="pack" {{ old('unit') === 'pack' ? 'selected' : '' }}>Pack</option>
-                                    <option value="bag" {{ old('unit') === 'bag' ? 'selected' : '' }}>Bag</option>
-                                    <option value="carton" {{ old('unit') === 'carton' ? 'selected' : '' }}>Carton</option>
-                                    <option value="crate" {{ old('unit') === 'crate' ? 'selected' : '' }}>Crate</option>
-                                    <option value="roll" {{ old('unit') === 'roll' ? 'selected' : '' }}>Roll</option>
-                                </optgroup>
-                            </select>
-                        </div>
-                        @error('unit')
-                            <p class="text-rose-600 dark:text-rose-400 text-xs mt-1.5 flex items-center gap-1">
-                                <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
-                                <span>{{ $message }}</span>
-                            </p>
-                        @enderror
-                    </div>
-
-                    {{-- Initial Stock --}}
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5" for="stock">
-                            Initial Stock
-                        </label>
-                        <div class="relative rounded-xl shadow-sm">
-                            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400 dark:text-gray-500">
-                                <i data-lucide="boxes" class="w-4 h-4"></i>
-                            </div>
-                            <input id="stock" type="number" min="0" step="any" name="stock"
-                                value="{{ old('stock', 0) }}"
-                                class="block w-full pl-10 pr-3.5 py-2.5 text-sm rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 dark:focus:ring-teal-400/20 dark:focus:border-teal-400 transition shadow-sm"
-                                placeholder="0">
-                        </div>
-                        @error('stock')
-                            <p class="text-rose-600 dark:text-rose-400 text-xs mt-1.5 flex items-center gap-1">
-                                <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
-                                <span>{{ $message }}</span>
-                            </p>
-                        @enderror
-                    </div>
+                {{-- Unit of Measure --}}
+                <div>
+                    <label for="unit" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                        Base Measurement Unit <span class="text-rose-500">*</span>
+                    </label>
+                    <select id="unit"
+                            name="unit"
+                            x-model="unit"
+                            required
+                            class="w-full py-2.5 px-3 text-xs rounded-xl border border-slate-200/90 dark:border-slate-700/80 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
+                        @foreach($unitFamilies as $familyKey => $family)
+                            <optgroup label="{{ $family['label'] }}">
+                                @foreach($family['units'] as $uKey => $uData)
+                                    <option value="{{ $uKey }}" {{ old('unit', 'kg') === $uKey ? 'selected' : '' }}>
+                                        {{ $uData['label'] }}
+                                    </option>
+                                @endforeach
+                            </optgroup>
+                        @endforeach
+                    </select>
                 </div>
-
-                {{-- Actions --}}
-                <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-700/80">
-                    <a href="{{ route('raw-materials.index') }}"
-                       class="px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/60 text-sm font-medium transition shadow-sm">
-                        Cancel
-                    </a>
-                    <button type="submit"
-                            class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-medium shadow-sm hover:shadow transition-all">
-                        <i data-lucide="check" class="w-4 h-4"></i>
-                        <span>Save Raw Material</span>
-                    </button>
-                </div>
-            </form>
+            </div>
         </div>
 
-    @endcannot
-</div>
+        {{-- Card 2: Cost & Valuation Strategy --}}
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-6 shadow-sm space-y-5">
+            <div class="flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <span class="w-7 h-7 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold text-xs">
+                    2
+                </span>
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900 dark:text-white">Pricing & Valuation</h2>
+                    <p class="text-xs text-slate-400">Baseline unit cost for intake purchases and BOM consumption</p>
+                </div>
+            </div>
 
-@push('scripts')
-<script src="https://unpkg.com/lucide@latest"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-        if (window.lucide && typeof window.lucide.createIcons === 'function') {
-            window.lucide.createIcons();
-        }
-    });
-</script>
-@endpush
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                {{-- Cost Price / Unit --}}
+                <div>
+                    <label for="price" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                        Unit Cost Price <span class="text-rose-500">*</span>
+                    </label>
+                    <div class="relative">
+                        <input type="number"
+                               step="0.01"
+                               min="0"
+                               id="price"
+                               name="price"
+                               x-model.number="price"
+                               required
+                               placeholder="0.00"
+                               class="w-full py-2.5 pl-3.5 pr-14 text-xs font-mono rounded-xl border border-slate-200/90 dark:border-slate-700/80 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
+                        <span class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-xs font-medium text-slate-400 pointer-events-none">
+                            RWF
+                        </span>
+                    </div>
+                    <p class="mt-1 text-[11px] text-slate-400">
+                        Initial baseline intake cost per <span x-text="unit" class="font-semibold text-slate-600 dark:text-slate-300"></span>.
+                    </p>
+                </div>
+
+                {{-- Live Cost Preview Pill --}}
+                <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex flex-col justify-center">
+                    <span class="text-[11px] text-slate-500 dark:text-slate-400">Formatted Unit Cost:</span>
+                    <div class="text-lg font-bold font-mono text-slate-900 dark:text-white mt-0.5">
+                        <span x-text="formatMoney(price)"></span> <span class="text-xs font-sans font-normal text-slate-400">RWF / <span x-text="unit"></span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- Card 3: Initial Warehouse Inventory Allocation --}}
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-6 shadow-sm space-y-5">
+            <div class="flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <span class="w-7 h-7 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold text-xs">
+                    3
+                </span>
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900 dark:text-white">Initial Warehouse Inventory</h2>
+                    <p class="text-xs text-slate-400">Optional opening balance automatically logged into the stock movements audit trail</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                {{-- Opening Stock --}}
+                <div>
+                    <label for="stock" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                        Opening Physical Stock <span class="text-rose-500">*</span>
+                    </label>
+                    <div class="relative">
+                        <input type="number"
+                               step="0.01"
+                               min="0"
+                               id="stock"
+                               name="stock"
+                               x-model.number="stock"
+                               required
+                               placeholder="0.00"
+                               class="w-full py-2.5 pl-3.5 pr-14 text-xs font-mono rounded-xl border border-slate-200/90 dark:border-slate-700/80 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
+                        <span class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-xs font-medium text-slate-400 pointer-events-none" x-text="unit"></span>
+                    </div>
+                    <p class="mt-1 text-[11px] text-slate-400">
+                        Enter 0 if this material has no initial warehouse balance.
+                    </p>
+                </div>
+
+                {{-- Opening Asset Valuation Card --}}
+                <div class="p-3.5 rounded-xl bg-teal-50/60 dark:bg-teal-950/30 border border-teal-100 dark:border-teal-900/40 flex flex-col justify-center">
+                    <span class="text-[11px] font-medium text-teal-700 dark:text-teal-300">Initial Asset Valuation:</span>
+                    <div class="text-lg font-bold font-mono text-teal-900 dark:text-teal-200 mt-0.5">
+                        <span x-text="formatMoney(initialValue)"></span> <span class="text-xs font-sans font-normal text-teal-600 dark:text-teal-400">RWF</span>
+                    </div>
+                    <span class="text-[10px] text-teal-600 dark:text-teal-400 mt-0.5">
+                        Valued as opening inventory intake
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        {{-- Form Actions Bar --}}
+        <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-200/80 dark:border-slate-800">
+            <a href="{{ route('raw-materials.index') }}"
+               class="px-4 py-2.5 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200/90 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 transition">
+                Discard Changes
+            </a>
+
+            <button type="submit"
+                    class="inline-flex items-center gap-1.5 px-5 py-2.5 text-xs font-semibold rounded-xl text-white bg-teal-600 hover:bg-teal-700 active:bg-teal-800 shadow-sm transition">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Save & Create Material
+            </button>
+        </div>
+    </form>
+</div>
 @endsection

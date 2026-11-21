@@ -72,101 +72,147 @@
     <div class="flex-1 flex flex-col overflow-hidden">
 
         {{-- ====== HEADER ====== --}}
-        <header class="flex items-center justify-between bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm px-4 lg:px-6 py-3">
+        <header class="flex items-center justify-between bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border-b border-gray-200/80 dark:border-gray-800 px-4 lg:px-7 py-2.5 sticky top-0 z-30 transition-colors">
+            {{-- Left: Breadcrumb / Mobile Toggle --}}
             <div class="flex items-center gap-3">
-                <button class="text-gray-600 dark:text-gray-300 hover:text-indigo-600 lg:hidden" @click="sidebarOpen = true">
-                    <i data-lucide="menu" class="w-6 h-6"></i>
+                <button class="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 rounded-lg lg:hidden transition"
+                        @click="sidebarOpen = true"
+                        aria-label="Open sidebar">
+                    <i data-lucide="menu" class="w-5 h-5"></i>
                 </button>
-                <h1 class="text-lg font-semibold text-gray-800 dark:text-gray-100 tracking-tight">
-                    @yield('title', 'Dashboard')
-                </h1>
+
+                <nav class="flex items-center gap-2 text-sm font-medium">
+                    <span class="text-gray-400 dark:text-gray-500 font-normal">Nezerwa Plus</span>
+                    <span class="text-gray-300 dark:text-gray-700">/</span>
+                    <span class="font-semibold text-gray-900 dark:text-white">@yield('title', 'Dashboard')</span>
+                </nav>
             </div>
 
-            <div class="flex items-center gap-4">
+            {{-- Center: Quick Search Bar --}}
+            <div class="hidden md:flex items-center">
+                @can('products.view')
+                    <a href="{{ route('products.index') }}"
+                       class="flex items-center gap-2.5 px-3 py-1.5 text-xs text-gray-400 dark:text-gray-500 bg-gray-100/80 dark:bg-gray-800/60 hover:bg-gray-200/70 dark:hover:bg-gray-700/50 rounded-xl border border-gray-200/70 dark:border-gray-700/60 transition-all w-64 shadow-xs group">
+                        <i data-lucide="search" class="w-3.5 h-3.5 text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300 transition-colors"></i>
+                        <span class="truncate">Search products or stock...</span>
+                        <kbd class="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-gray-400">Ctrl+K</kbd>
+                    </a>
+                @endcan
+            </div>
+
+            {{-- Right: Actions & Profile --}}
+            <div class="flex items-center gap-2.5 sm:gap-3">
+                {{-- 🌐 Live Connection Status --}}
+                <div id="connection-indicator"
+                     class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span id="connection-text" class="text-[11px] font-semibold tracking-wide uppercase">Live</span>
+                </div>
+
                 {{-- 🌙 Dark Mode Toggle --}}
                 <button
                     @click="
                         const isDark = document.documentElement.classList.toggle('dark');
                         localStorage.theme = isDark ? 'dark' : 'light';
                     "
-                    class="w-9 h-9 flex items-center justify-center rounded-full border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 transition"
-                    title="Toggle dark mode">
-                    <i data-lucide="moon" class="w-4 h-4 text-gray-600 dark:hidden"></i>
-                    <i data-lucide="sun" class="w-4 h-4 text-yellow-400 hidden dark:block"></i>
+                    class="w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 transition"
+                    title="Toggle theme">
+                    <i data-lucide="moon" class="w-4 h-4 dark:hidden"></i>
+                    <i data-lucide="sun" class="w-4 h-4 hidden dark:block text-amber-400"></i>
                 </button>
 
-                {{-- 🌐 Connection Indicator --}}
-                <div id="connection-indicator" class="hidden sm:flex items-center gap-1 text-sm font-medium">
-                    <svg id="wifi-icon" xmlns="http://www.w3.org/2000/svg"
-                         class="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round"
-                              d="M5 13a10 10 0 0114 0M8.5 16.5a5 5 0 017 0M12 20h.01" />
-                    </svg>
-                    <span id="connection-text" class="text-green-600 dark:text-green-400">Online</span>
-                </div>
-
-                {{-- 🌍 Language Switcher (Google Translate) --}}
+                {{-- 🌍 Language Switcher --}}
                 <div class="relative" x-data="{ open:false }" @keydown.escape="open=false" @click.away="open=false">
                     <button @click="open=!open"
-                            class="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                            class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition border border-gray-200/70 dark:border-gray-700/70"
                             title="Change language">
-                        <i data-lucide="languages" class="w-4 h-4 text-gray-500"></i>
-                        <span id="lang-badge" class="hidden sm:block text-sm font-medium text-gray-700 dark:text-gray-300">EN</span>
-                        <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400"></i>
+                        <i data-lucide="globe" class="w-3.5 h-3.5 text-gray-400"></i>
+                        <span id="lang-badge" class="font-semibold uppercase tracking-wider text-[11px]">EN</span>
+                        <i data-lucide="chevron-down" class="w-3 h-3 text-gray-400"></i>
                     </button>
 
                     <div x-show="open" x-cloak x-transition
-                         class="absolute right-0 mt-2 w-44 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 z-50">
-                        <button type="button" class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
-                                @click="window.__setLanguage('en'); open=false">English</button>
-                        <button type="button" class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
-                                @click="window.__setLanguage('fr'); open=false">Français</button>
-                        <button type="button" class="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
-                                @click="window.__setLanguage('rw'); open=false">Kinyarwanda</button>
-                        <div class="mt-1 px-4 pb-2 text-[10px] text-gray-400">Powered by Google Translate</div>
+                         class="absolute right-0 mt-2 w-44 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 z-50 divide-y divide-gray-100 dark:divide-gray-700/60">
+                        <div class="py-1">
+                            <button type="button" class="w-full text-left px-3.5 py-2 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center justify-between"
+                                    @click="window.__setLanguage('en'); open=false">
+                                <span>English</span>
+                                <span class="text-[10px] text-gray-400 uppercase">EN</span>
+                            </button>
+                            <button type="button" class="w-full text-left px-3.5 py-2 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center justify-between"
+                                    @click="window.__setLanguage('fr'); open=false">
+                                <span>Français</span>
+                                <span class="text-[10px] text-gray-400 uppercase">FR</span>
+                            </button>
+                            <button type="button" class="w-full text-left px-3.5 py-2 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center justify-between"
+                                    @click="window.__setLanguage('rw'); open=false">
+                                <span>Kinyarwanda</span>
+                                <span class="text-[10px] text-gray-400 uppercase">RW</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
+
+                <div class="h-5 w-px bg-gray-200 dark:bg-gray-700/80"></div>
 
                 {{-- 👤 User Dropdown --}}
                 <div class="relative" x-data="{ userMenu: false }" @click.away="userMenu = false">
                     <button @click="userMenu = !userMenu"
-                            class="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition">
+                            class="flex items-center gap-2.5 p-1 sm:px-2.5 sm:py-1 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition text-left">
                         @php
                             $user = Auth::user();
                             $photo = $user?->photo ? asset('storage/' . $user->photo) : null;
+                            $userRole = $user?->getRoleNames()->first() ?? 'User';
                         @endphp
 
                         @if($photo)
                             <img src="{{ $photo }}" alt="{{ $user->name }}"
-                                 class="w-8 h-8 rounded-full object-cover border border-gray-300 dark:border-gray-600">
+                                 class="w-7 h-7 rounded-full object-cover ring-1 ring-gray-200 dark:ring-gray-700">
                         @else
-                            <div class="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center">
-                                <span class="text-indigo-700 dark:text-indigo-300 text-sm font-semibold">
-                                    {{ strtoupper(substr($user->name ?? 'U', 0, 1)) }}
-                                </span>
+                            <div class="w-7 h-7 rounded-full bg-teal-500/10 dark:bg-teal-500/20 text-teal-600 dark:text-teal-400 ring-1 ring-teal-500/30 flex items-center justify-center font-bold text-xs">
+                                {{ strtoupper(substr($user->name ?? 'U', 0, 1)) }}
                             </div>
                         @endif
 
-                        <span class="hidden sm:block text-sm font-medium text-gray-700 dark:text-gray-300 truncate max-w-[120px]">
-                            {{ $user->name ?? 'User' }}
-                        </span>
-                        <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400"></i>
+                        <div class="hidden sm:block">
+                            <p class="text-xs font-semibold text-gray-800 dark:text-gray-100 leading-tight truncate max-w-[110px]">
+                                {{ $user->name ?? 'User' }}
+                            </p>
+                            <span class="inline-flex items-center text-[10px] font-medium text-teal-600 dark:text-teal-400 uppercase tracking-wider">
+                                {{ ucfirst($userRole) }}
+                            </span>
+                        </div>
+                        <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-gray-400 hidden sm:block"></i>
                     </button>
 
                     <div x-show="userMenu" x-cloak x-transition
-                         class="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 z-50">
-                        <a href="{{ route('profile.edit') }}"
-                           class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700">
-                            <i data-lucide="user" class="w-4 h-4 inline mr-2"></i> Profile
-                        </a>
-                        <div class="border-t border-gray-100 dark:border-gray-700 my-1"></div>
-                        <form method="POST" action="{{ route('logout') }}">
-                            @csrf
-                            <button type="submit"
-                                    class="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-gray-700">
-                                <i data-lucide="log-out" class="w-4 h-4 inline mr-2"></i> Logout
-                            </button>
-                        </form>
+                         class="absolute right-0 mt-2 w-52 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg py-1 z-50">
+                        <div class="px-3.5 py-2.5 border-b border-gray-100 dark:border-gray-700/60">
+                            <p class="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate">{{ $user->name ?? 'User' }}</p>
+                            <p class="text-[11px] text-gray-500 dark:text-gray-400 truncate">{{ $user->email ?? '' }}</p>
+                            <span class="mt-1.5 inline-block text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">
+                                {{ ucfirst($userRole) }} Role
+                            </span>
+                        </div>
+
+                        <div class="py-1">
+                            <a href="{{ route('profile.edit') }}"
+                               class="flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <i data-lucide="user" class="w-3.5 h-3.5 text-gray-400"></i>
+                                <span>Account Settings</span>
+                            </a>
+                        </div>
+
+                        <div class="border-t border-gray-100 dark:border-gray-700/60 py-1">
+                            <form method="POST" action="{{ route('logout') }}">
+                                @csrf
+                                <button type="submit"
+                                        class="w-full flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                                    <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+                                    <span>Sign Out</span>
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </div>

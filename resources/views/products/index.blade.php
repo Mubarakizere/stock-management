@@ -1,25 +1,20 @@
 @extends('layouts.app')
-@section('title', 'Products')
+@section('title', 'Products Catalog')
 
 @section('content')
 @php
     use App\Models\Category;
     use Illuminate\Support\Str;
 
-    // Number formatting helpers
     $fmt0 = fn($n) => number_format((float)($n ?? 0), 0);
     $fmt2 = fn($n) => number_format((float)($n ?? 0), 2);
-
-    // Low-stock threshold (fallback to 5 if not provided)
     $threshold = (int)($threshold ?? 5);
 
-    // Ensure categories exist even if controller forgot to pass them
-    $allCategories    = $categories ?? Category::orderBy('name')->get();
+    $allCategories = $categories ?? Category::orderBy('name')->get();
     $usableCategories = collect($allCategories)
         ->filter(fn($c) => ($c->is_active ?? true) && in_array($c->kind ?? 'product', ['product','both']))
         ->values();
 
-    // Make stats work whether $products is a Paginator or a Collection
     $__coll = $products instanceof \Illuminate\Contracts\Pagination\LengthAwarePaginator
         ? $products->getCollection()
         : collect($products);
@@ -28,7 +23,6 @@
     $pageCount   = $isPaginated ? $products->count() : $__coll->count();
     $totalCount  = $isPaginated ? $products->total() : $pageCount;
 
-    // Page (current result set) derived stats
     $pageUnits   = $__coll->sum(fn($p) => max(0, (int)($p->qty_in ?? 0) - (int)($p->qty_out ?? 0)));
     $pageValue   = $__coll->sum(function($p){
         $units = max(0, (int)($p->qty_in ?? 0) - (int)($p->qty_out ?? 0));
@@ -38,755 +32,574 @@
         $units = max(0, (int)($p->qty_in ?? 0) - (int)($p->qty_out ?? 0));
         return $units * (float)($p->price ?? 0);
     });
-    $pageReturns = $__coll->sum(fn($p) => (float)($p->qty_returned ?? 0));
 @endphp
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6"
+     x-data="{
+        ...bulkSelect(),
+        singleDeleteModalOpen: false,
+        singleDeleteUrl: '',
+        singleDeleteName: '',
+        singleDeleteSku: '',
+        singleDeleteStock: 0,
+        openSingleDeleteModal(url, name, sku, stock) {
+            this.singleDeleteUrl = url;
+            this.singleDeleteName = name;
+            this.singleDeleteSku = sku;
+            this.singleDeleteStock = stock;
+            this.singleDeleteModalOpen = true;
+        }
+     }">
 
-    {{-- Header --}}
-    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <h1 class="flex items-center gap-2 text-xl sm:text-2xl font-semibold text-gray-900 dark:text-gray-100">
-            <i data-lucide="package" class="w-5 h-5 text-indigo-600 dark:text-indigo-400"></i>
-            <span>Products</span>
-        </h1>
+    {{-- Breadcrumbs & Header --}}
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mb-1">
+                <span>Inventory</span>
+                <span>/</span>
+                <span class="text-slate-700 dark:text-slate-300 font-medium">Finished Goods</span>
+            </div>
+            <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Products Catalog</h1>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Track warehouse inventory, unit margins, weighted average costs (WAC), and reorder thresholds.
+            </p>
+        </div>
 
-        <div class="flex flex-wrap gap-2 justify-start md:justify-end">
-            @can('products.create')
-                <a href="{{ route('products.create') }}"
-                   class="btn btn-primary flex items-center gap-1 text-sm">
-                    <i data-lucide="plus" class="w-4 h-4"></i>
-                    <span>Add Product</span>
-                </a>
-            @endcan
-
+        <div class="flex flex-wrap items-center gap-2.5">
+            {{-- Export Report Dropdown --}}
             @can('products.view')
-                <div x-data="{ open: false }" class="relative">
-                    <button @click="open = !open" @click.outside="open = false" class="btn btn-outline text-sm flex items-center gap-1">
-                        <i data-lucide="download" class="w-4 h-4"></i>
-                        <span>Export Report</span>
-                        <i data-lucide="chevron-down" class="w-3 h-3 ml-1"></i>
+                <div x-data="{ exportOpen: false }" class="relative">
+                    <button @click="exportOpen = !exportOpen" @click.outside="exportOpen = false"
+                            class="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200/90 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700/80 shadow-sm transition">
+                        <svg class="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <span>Stock PDF</span>
+                        <svg class="w-3 h-3 text-slate-400 ml-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
                     </button>
-                    <div x-show="open" x-cloak class="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 z-50">
-                        <a href="{{ route('products.export.stock.pdf', ['filter' => 'all']) }}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">All Products</a>
-                        <a href="{{ route('products.export.stock.pdf', ['filter' => 'low']) }}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Low Stock (≤ {{ $threshold }})</a>
-                        <a href="{{ route('products.export.stock.pdf', ['filter' => 'out']) }}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">Out of Stock</a>
+                    <div x-show="exportOpen" x-cloak
+                         x-transition:enter="transition ease-out duration-150"
+                         x-transition:enter-start="opacity-0 scale-95"
+                         x-transition:enter-end="opacity-100 scale-100"
+                         x-transition:leave="transition ease-in duration-100"
+                         x-transition:leave-start="opacity-100 scale-100"
+                         x-transition:leave-end="opacity-0 scale-95"
+                         class="absolute right-0 mt-2 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl py-1 z-50 text-xs">
+                        <a href="{{ route('products.export.stock.pdf', ['filter' => 'all']) }}" class="flex items-center gap-2 px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200">
+                            <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+                            All Products Catalog
+                        </a>
+                        <a href="{{ route('products.export.stock.pdf', ['filter' => 'low']) }}" class="flex items-center gap-2 px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 text-amber-700 dark:text-amber-400">
+                            <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                            Low Stock (≤ {{ $threshold }})
+                        </a>
+                        <a href="{{ route('products.export.stock.pdf', ['filter' => 'out']) }}" class="flex items-center gap-2 px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 text-rose-700 dark:text-rose-400">
+                            <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+                            Out of Stock (Zero Units)
+                        </a>
                     </div>
                 </div>
             @endcan
 
+            {{-- Stock Movements Link --}}
             @can('stock.view')
-                <a href="{{ route('stock.history', request()->only('product_id')) }}"
-                   class="btn btn-outline text-sm flex items-center gap-1">
-                    <i data-lucide="history" class="w-4 h-4"></i>
-                    <span>Stock Movements</span>
+                <a href="{{ route('stock.history') }}" class="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200/90 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700/80 shadow-sm transition">
+                    <svg class="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Movements
+                </a>
+            @endcan
+
+            {{-- Add Product Primary --}}
+            @can('products.create')
+                <a href="{{ route('products.create') }}" class="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl text-white bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 shadow-sm transition">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Add Product
                 </a>
             @endcan
         </div>
     </div>
 
     @cannot('products.view')
-        {{-- No permission state --}}
-        <div class="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-6">
-            <div class="flex items-start gap-3">
-                <i data-lucide="shield-alert" class="w-5 h-5 text-amber-500 mt-0.5"></i>
-                <div>
-                    <h2 class="text-sm font-semibold text-amber-800 dark:text-amber-200">
-                        You don’t have permission to view products.
-                    </h2>
-                    <p class="mt-1 text-xs text-amber-700 dark:text-amber-300">
-                        Please contact your administrator to request access.
-                    </p>
-                </div>
-            </div>
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-8 text-center">
+            <p class="text-sm font-semibold text-slate-800 dark:text-slate-200">Permission Required</p>
+            <p class="text-xs text-slate-400 mt-1">You do not have administrative access to view the product inventory.</p>
         </div>
     @else
 
-        {{-- Filters --}}
-        <form
-            method="GET"
-            action="{{ route('products.index') }}"
-            x-data="{ qcat: '' }"
-            class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 shadow-sm space-y-3"
-        >
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3">
+        {{-- 4 Executive Metric Cards --}}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {{-- Catalog Total --}}
+            <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-5 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Products Catalog</span>
+                    <span class="w-8 h-8 rounded-xl bg-teal-50 dark:bg-teal-950/50 text-teal-600 dark:text-teal-400 flex items-center justify-center">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                        </svg>
+                    </span>
+                </div>
+                <div class="mt-2">
+                    <div class="text-2xl font-bold font-mono tracking-tight text-slate-900 dark:text-white">
+                        {{ $fmt0($totalCount) }}
+                    </div>
+                    <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Active finished goods items
+                    </div>
+                </div>
+            </div>
+
+            {{-- Total Units in Stock --}}
+            <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-5 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Units in Stock</span>
+                    <span class="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
+                        </svg>
+                    </span>
+                </div>
+                <div class="mt-2">
+                    <div class="text-2xl font-bold font-mono tracking-tight text-emerald-600 dark:text-emerald-400">
+                        {{ $fmt0($pageUnits) }}
+                    </div>
+                    <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Available warehouse quantity
+                    </div>
+                </div>
+            </div>
+
+            {{-- Inventory Valuation at Cost --}}
+            <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-5 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Stock Valuation (at Cost)</span>
+                    <span class="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </span>
+                </div>
+                <div class="mt-2">
+                    <div class="text-2xl font-bold font-mono tracking-tight text-slate-900 dark:text-white">
+                        {{ $fmt2($pageValue) }} <span class="text-xs font-medium text-slate-400 font-sans">RWF</span>
+                    </div>
+                    <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Weighted average holding cost
+                    </div>
+                </div>
+            </div>
+
+            {{-- Potential Gross Revenue --}}
+            <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-5 shadow-sm">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Potential Gross Sales</span>
+                    <span class="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                        </svg>
+                    </span>
+                </div>
+                <div class="mt-2">
+                    <div class="text-2xl font-bold font-mono tracking-tight text-amber-600 dark:text-amber-400">
+                        {{ $fmt2($pageRevenue) }} <span class="text-xs font-medium text-slate-400 font-sans">RWF</span>
+                    </div>
+                    <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Value at retail catalog pricing
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- Filter & Search Toolbar --}}
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 shadow-sm">
+            <form method="GET" action="{{ route('products.index') }}" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
                 {{-- Search --}}
-                <div class="md:col-span-2">
-                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Search</label>
+                <div class="lg:col-span-2">
+                    <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Search Products</label>
                     <div class="relative">
-                        <i data-lucide="search" class="w-4 h-4 absolute left-2.5 top-2.5 text-gray-400"></i>
+                        <span class="absolute inset-y-0 left-3 flex items-center text-slate-400 pointer-events-none">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                            </svg>
+                        </span>
                         <input
+                            type="text"
                             name="search"
                             value="{{ request('search') }}"
-                            placeholder="Name, SKU…"
-                            class="form-input w-full pl-8 text-sm">
+                            placeholder="Search by name, SKU, or ID..."
+                            class="w-full pl-9 pr-8 text-xs rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 placeholder-slate-400 focus:border-teal-500 focus:ring-teal-500"
+                        >
+                        @if(request('search'))
+                            <a href="{{ route('products.index', request()->except('search')) }}" class="absolute inset-y-0 right-2.5 flex items-center text-slate-400 hover:text-slate-600">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                </svg>
+                            </a>
+                        @endif
                     </div>
                 </div>
 
                 {{-- Category --}}
-                <div class="md:col-span-2">
-                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Category</label>
-
-                    <div class="relative mb-1">
-                        <i data-lucide="search" class="w-4 h-4 absolute left-2.5 top-2.5 text-gray-400"></i>
-                        <input
-                            x-model="qcat"
-                            type="text"
-                            placeholder="Filter categories…"
-                            class="form-input w-full pl-8 text-xs"
-                            aria-label="Filter categories">
-                    </div>
-
-                    <select
-                        name="category_id"
-                        class="form-select w-full text-sm"
-                        x-init="
-                            $watch('qcat', v => {
-                                const opts = $el.querySelectorAll('option[data-name]');
-                                const k = (v || '').toLowerCase();
-                                opts.forEach(o => {
-                                    o.hidden = !o.dataset.name.includes(k) && o.value !== '';
-                                });
-                            })
-                        "
-                    >
-                        <option value="">All categories</option>
+                <div class="lg:col-span-2">
+                    <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Category</label>
+                    <select name="category_id" class="w-full text-xs rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 focus:border-teal-500 focus:ring-teal-500">
+                        <option value="">All Categories</option>
                         @foreach($usableCategories as $c)
-                            @php
-                                $label = trim($c->name.' '.($c->code ? "({$c->code})" : ''));
-                            @endphp
-                            <option
-                                value="{{ $c->id }}"
-                                data-name="{{ Str::lower($label) }}"
-                                @selected(request('category_id') == $c->id)
-                            >
-                                {{ $label }}
+                            <option value="{{ $c->id }}" @selected((string)request('category_id') === (string)$c->id)>
+                                {{ $c->name }} {{ $c->code ? "({$c->code})" : '' }}
                             </option>
                         @endforeach
                     </select>
                 </div>
 
-                {{-- Stock status --}}
+                {{-- Stock Status --}}
                 <div>
-                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Stock Status</label>
-                    <select name="stock_status" class="form-select w-full text-sm">
-                        <option value="">Any</option>
-                        <option value="in"  @selected(request('stock_status')==='in')>In stock</option>
-                        <option value="low" @selected(request('stock_status')==='low')>Low (≤ {{ $threshold }})</option>
-                        <option value="out" @selected(request('stock_status')==='out')>Out of stock</option>
+                    <label class="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Stock Health</label>
+                    <select name="stock_status" class="w-full text-xs rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 focus:border-teal-500 focus:ring-teal-500">
+                        <option value="">All Levels</option>
+                        <option value="in"  @selected(request('stock_status') === 'in')>In Stock (> {{ $threshold }})</option>
+                        <option value="low" @selected(request('stock_status') === 'low')>Low Stock (≤ {{ $threshold }})</option>
+                        <option value="out" @selected(request('stock_status') === 'out')>Out of Stock (0)</option>
                     </select>
                 </div>
 
-                {{-- Per page --}}
-                <div>
-                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Per page</label>
-                    <select name="per_page" class="form-select w-full text-sm" onchange="this.form.submit()">
-                        @foreach([10,20,50,100] as $pp)
-                            <option value="{{ $pp }}" @selected((int)request('per_page', 20)===$pp)>{{ $pp }}</option>
-                        @endforeach
-                    </select>
+                {{-- Action Buttons --}}
+                <div class="flex items-end gap-2">
+                    <button type="submit" class="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl text-white bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 shadow-sm transition">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                        </svg>
+                        Filter
+                    </button>
+
+                    @if(request()->anyFilled(['search', 'category_id', 'stock_status']))
+                        <a href="{{ route('products.index') }}" class="inline-flex items-center justify-center px-3 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 transition" title="Clear Filters">
+                            Reset
+                        </a>
+                    @endif
                 </div>
+            </form>
+        </div>
+
+        {{-- Floating Bulk Selection Action Toolbar --}}
+        <div x-show="selectedIds.length > 0"
+             x-cloak
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 translate-y-4"
+             x-transition:enter-end="opacity-100 translate-y-0"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100 translate-y-0"
+             x-transition:leave-end="opacity-0 translate-y-4"
+             class="fixed bottom-6 inset-x-0 mx-auto max-w-xl z-40 bg-slate-900 dark:bg-slate-800 text-white px-5 py-3.5 rounded-2xl shadow-2xl border border-slate-700/80 flex items-center justify-between gap-4">
+            <div class="flex items-center gap-2.5 text-xs">
+                <span class="w-6 h-6 rounded-lg bg-teal-500/20 text-teal-400 flex items-center justify-center font-bold font-mono text-xs">
+                    <span x-text="selectedIds.length"></span>
+                </span>
+                <span class="font-medium">Products selected for batch operations</span>
             </div>
 
-            <div class="flex flex-wrap gap-2 justify-end pt-2">
-                <button class="btn btn-outline text-sm flex items-center gap-1">
-                    <i data-lucide="filter" class="w-4 h-4"></i>
-                    <span>Apply</span>
+            <div class="flex items-center gap-2">
+                <button type="button" @click="selectedIds = []; allSelected = false"
+                        class="px-3 py-1.5 text-xs font-semibold rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition">
+                    Clear
                 </button>
-                <a href="{{ route('products.index') }}"
-                   class="btn btn-outline text-sm flex items-center gap-1">
-                    <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
-                    <span>Reset</span>
-                </a>
+                @can('products.delete')
+                    <button type="button" @click="$store.bulkConfirm.open = true"
+                            class="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-rose-600 hover:bg-rose-500 text-white shadow-sm transition">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                        Delete Batch
+                    </button>
+                @endcan
             </div>
+        </div>
+
+        {{-- Hidden Form for Bulk Delete --}}
+        <form id="bulk-delete-form" action="{{ route('products.bulk-delete') }}" method="POST" class="hidden">
+            @csrf
+            <template x-for="id in selectedIds" :key="id">
+                <input type="hidden" name="ids[]" :value="id">
+            </template>
         </form>
 
-        {{-- Page stats --}}
-        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
-            <x-stat-card title="Products (page)" value="{{ $fmt0($pageCount) }}" color="indigo" />
-            <x-stat-card title="Units in stock (page)" value="{{ $fmt0($pageUnits) }}" color="blue" />
-            <x-stat-card title="Stock value @ cost (page)" value="RWF {{ $fmt2($pageValue) }}" color="emerald" />
-            <x-stat-card title="Potential revenue (page)" value="RWF {{ $fmt2($pageRevenue) }}" color="amber" />
-        </div>
-
-        @if($isPaginated && $totalCount !== $pageCount)
-            <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Showing {{ $pageCount }} of {{ $fmt0($totalCount) }} matching products.
+        {{-- Products Table Card --}}
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+                @include('products._table')
             </div>
-        @endif
 
-        {{-- Table --}}
-        <div x-data="bulkSelect()" class="relative">
-
-            {{-- Bulk Actions Bar --}}
-            <div x-show="selectedIds.length > 0" x-transition x-cloak
-                 class="mb-3 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700 rounded-xl px-4 py-3 flex items-center justify-between">
-                <div class="flex items-center gap-2 text-sm text-indigo-700 dark:text-indigo-300">
-                    <i data-lucide="check-square" class="w-4 h-4"></i>
-                    <span><strong x-text="selectedIds.length"></strong> product(s) selected</span>
+            {{-- Pagination --}}
+            @if($isPaginated && $products->hasPages())
+                <div class="px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                    {{ $products->links() }}
                 </div>
-                <div class="flex items-center gap-2">
-                    <button type="button" @click="selectedIds = []; allSelected = false"
-                            class="btn btn-outline text-xs px-3 py-1.5">
-                        Clear
-                    </button>
-                    @can('products.delete')
-                        <button type="button" @click="$store.bulkConfirm.open = true"
-                                class="btn btn-danger text-xs px-3 py-1.5 flex items-center gap-1">
-                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                            Delete Selected
-                        </button>
-                    @endcan
-                </div>
-            </div>
-
-            {{-- Hidden form for bulk delete --}}
-            <form id="bulk-delete-form" action="{{ route('products.bulk-delete') }}" method="POST" class="hidden">
-                @csrf
-                <template x-for="id in selectedIds" :key="id">
-                    <input type="hidden" name="ids[]" :value="id">
-                </template>
-            </form>
-
-            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm overflow-x-auto">
-            <table class="min-w-[1200px] w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-                <thead class="bg-gray-50 dark:bg-gray-900/40 text-gray-700 dark:text-gray-300 uppercase text-xs font-medium">
-                    <tr>
-                        <th class="px-4 py-3 w-10">
-                            <input type="checkbox" x-model="allSelected" @change="toggleAll()"
-                                   class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500">
-                        </th>
-                        <th class="px-4 py-3 text-left">Name</th>
-                        <th class="px-4 py-3 text-left">Category</th>
-                        <th class="px-4 py-3 text-left">SKU</th>
-                        <th class="px-4 py-3 text-right">Cost (WAC)</th>
-                        <th class="px-4 py-3 text-right">Price</th>
-                        <th class="px-4 py-3 text-right">Margin</th>
-                        <th class="px-4 py-3 text-right">In</th>
-                        <th class="px-4 py-3 text-right">Out</th>
-                        <th class="px-4 py-3 text-right">Returned</th>
-                        <th class="px-4 py-3 text-right">Stock</th>
-                        <th class="px-4 py-3 text-left">Last Moved</th>
-                        <th class="px-4 py-3 text-right">Actions</th>
-                    </tr>
-                </thead>
-
-                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                    @forelse ($products as $p)
-                        @php
-                            $in   = (float)($p->qty_in ?? 0);
-                            $out  = (float)($p->qty_out ?? 0);
-                            $ret  = (float)($p->qty_returned ?? 0);
-                            $stk  = max(0, $in - $out);
-                            $low  = $stk <= $threshold && $stk > 0;
-                            $zero = $stk <= 0;
-
-                            $cost   = (float)($p->cost_price ?? 0);
-                            $price  = (float)($p->price ?? 0);
-                            $margin = $price > 0 ? (($price - $cost) / $price) * 100 : 0;
-
-                            $last  = $p->last_moved_at ? \Carbon\Carbon::parse($p->last_moved_at)->diffForHumans() : '—';
-
-                            $cat   = $p->category ?? null;
-                            $catOk = $cat && (($cat->is_active ?? true) && in_array($cat->kind ?? 'product',['product','both']));
-                            $dot   = $cat->color ?? '#6b7280';
-                        @endphp
-
-                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/40 transition" :class="selectedIds.includes({{ $p->id }}) ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''" data-product-id="{{ $p->id }}">
-                            {{-- Checkbox --}}
-                            <td class="px-4 py-3">
-                                <input type="checkbox" value="{{ $p->id }}"
-                                       x-model.number="selectedIds"
-                                       @change="updateAllSelected()"
-                                       class="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500">
-                            </td>
-                            {{-- Name --}}
-                            <td class="px-4 py-3 text-gray-900 dark:text-gray-100 font-medium">
-                                @can('products.view')
-                                    <a href="{{ route('products.show', $p) }}"
-                                       class="hover:text-indigo-600 dark:hover:text-indigo-400">
-                                        {{ $p->name }}
-                                    </a>
-                                @else
-                                    {{ $p->name }}
-                                @endcan
-
-                                @if($ret > 0)
-                                    <span class="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                                        <i data-lucide="u-turn-left" class="w-3 h-3"></i>
-                                        Returns
-                                    </span>
-                                @endif
-                            </td>
-
-                            {{-- Category --}}
-                            <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                @if($cat)
-                                    <span class="inline-flex items-center gap-1.5">
-                                        <span class="inline-block w-2.5 h-2.5 rounded-full" style="background: {{ $dot }}"></span>
-                                        <span>{{ $cat->name }}</span>
-
-                                        @if(!empty($cat->code))
-                                            <span class="ml-1 text-[11px] px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
-                                                {{ $cat->code }}
-                                            </span>
-                                        @endif
-
-                                        @unless($catOk)
-                                            <span class="ml-2 text-[11px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">
-                                                Not usable
-                                            </span>
-                                        @endunless
-                                    </span>
-                                @else
-                                    <span class="text-rose-600 dark:text-rose-300">—</span>
-                                @endif
-                            </td>
-
-                            {{-- SKU --}}
-                            <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
-                                {{ $p->sku ?? '—' }}
-                            </td>
-
-                            {{-- Cost --}}
-                            <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
-                                RWF {{ $fmt2($cost) }}
-                            </td>
-
-                            {{-- Price --}}
-                            <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300">
-                                RWF {{ $fmt2($price) }}
-                            </td>
-
-                            {{-- Margin --}}
-                            <td class="px-4 py-3 text-right">
-                                <span class="font-medium {{ $margin >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300' }}">
-                                    {{ $fmt2($margin) }}%
-                                </span>
-                            </td>
-
-                            {{-- In --}}
-                            <td class="px-4 py-3 text-right text-emerald-700 dark:text-emerald-300 font-semibold">
-                                {{ $fmt0($in) }}
-                            </td>
-
-                            {{-- Out --}}
-                            <td class="px-4 py-3 text-right text-rose-700 dark:text-rose-300 font-semibold">
-                                {{ $fmt0($out) }}
-                            </td>
-
-                            {{-- Returned --}}
-                            <td class="px-4 py-3 text-right text-amber-700 dark:text-amber-300">
-                                {{ $fmt0($ret) }}
-                            </td>
-
-                            {{-- Stock --}}
-                            <td class="px-4 py-3 text-right font-semibold
-                                {{ $zero ? 'text-rose-600 dark:text-rose-300'
-                                         : ($low ? 'text-amber-700 dark:text-amber-300'
-                                                 : 'text-gray-900 dark:text-gray-100') }}">
-                                <span data-stock>{{ $fmt0($stk) }}</span>
-                                @if($zero)
-                                    <span class="ml-2 px-2 py-0.5 text-[11px] rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300">
-                                        Out
-                                    </span>
-                                @elseif($low)
-                                    <span class="ml-2 px-2 py-0.5 text-[11px] rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">
-                                        Low
-                                    </span>
-                                @endif
-                            </td>
-
-                            {{-- Last moved --}}
-                            <td class="px-4 py-3 text-gray-600 dark:text-gray-300">
-                                {{ $last }}
-                            </td>
-
-                            {{-- Actions --}}
-                            <td class="px-4 py-3 text-right whitespace-nowrap">
-                                <button
-                                    type="button"
-                                    @click="$store.productActions.open({{ $p->id }}, '{{ addslashes($p->name) }}', {{ $stk }}, {{ $p->recipeItems ? $p->recipeItems->count() : 0 }})"
-                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg
-                                           bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300
-                                           hover:bg-indigo-100 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-300
-                                           transition-all"
-                                >
-                                    <i data-lucide="settings-2" class="w-3.5 h-3.5"></i>
-                                    Actions
-                                </button>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="13" class="px-4 py-6 text-center text-gray-500 dark:text-gray-400 text-sm">
-                                No products found.
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
+            @endif
         </div>
-        </div>
-
-        {{-- Pagination --}}
-        @if($isPaginated)
-            <div class="mt-4">
-                {{ $products->withQueryString()->links() }}
-            </div>
-        @endif
 
     @endcannot
-</div>
 
-{{-- Product Actions Modal --}}
-<div
-    x-data
-    x-show="$store.productActions.show"
-    x-cloak
-    class="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm"
-    @keydown.escape.window="$store.productActions.close()"
->
-    <div
-        @click.outside="$store.productActions.close()"
-        x-show="$store.productActions.show"
-        x-transition:enter="transition ease-out duration-200"
-        x-transition:enter-start="opacity-0 translate-y-8 sm:translate-y-4 sm:scale-95"
-        x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
-        x-transition:leave="transition ease-in duration-150"
-        x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
-        x-transition:leave-end="opacity-0 translate-y-8 sm:translate-y-4 sm:scale-95"
-        class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700
-               rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md mx-0 sm:mx-4
-               max-h-[85vh] overflow-y-auto"
-    >
-        {{-- Header --}}
-        <div class="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-5 py-4 flex items-center justify-between rounded-t-2xl">
-            <div>
-                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100" x-text="$store.productActions.name"></h2>
-                <div class="flex items-center gap-2 mt-1">
-                    <span class="text-xs text-gray-500 dark:text-gray-400">Current stock:</span>
-                    <span class="px-2 py-0.5 text-xs font-semibold rounded-full"
-                          :class="$store.productActions.stock <= 0
-                              ? 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300'
-                              : ($store.productActions.stock <= 5
-                                  ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
-                                  : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300')"
-                          x-text="$store.productActions.stock"></span>
+    {{-- ============================================================ --}}
+    {{-- MODAL 1: SINGLE DELETE CONFIRMATION MODAL                    --}}
+    {{-- ============================================================ --}}
+    @can('products.delete')
+    <div x-show="singleDeleteModalOpen"
+         x-cloak
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+
+        <div @click.away="singleDeleteModalOpen = false"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100 scale-100"
+             x-transition:leave-end="opacity-0 scale-95"
+             class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+
+            <div class="flex items-start gap-4">
+                <div class="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 ring-1 ring-rose-200 dark:ring-rose-800">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                </div>
+                <div class="space-y-1">
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white">
+                        Delete Product Item
+                    </h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                        Are you sure you want to permanently delete <strong class="text-slate-800 dark:text-slate-200" x-text="singleDeleteName"></strong>?
+                    </p>
                 </div>
             </div>
-            <button @click="$store.productActions.close()" class="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition">
-                <i data-lucide="x" class="w-5 h-5 text-gray-400"></i>
-            </button>
-        </div>
 
-        {{-- Action Cards --}}
-        <div class="p-4 grid grid-cols-2 gap-3">
-            @can('products.view')
-                <a :href="'/products/' + $store.productActions.id"
-                   class="group flex flex-col items-center gap-2 p-4 rounded-xl border border-gray-200 dark:border-gray-700
-                          hover:border-indigo-300 dark:hover:border-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-all">
-                    <div class="p-2.5 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 group-hover:bg-indigo-200 dark:group-hover:bg-indigo-800/40 transition">
-                        <i data-lucide="eye" class="w-5 h-5 text-indigo-600 dark:text-indigo-400"></i>
-                    </div>
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">View Details</span>
-                </a>
-            @endcan
-
-            @can('products.edit')
-                <a :href="'/products/' + $store.productActions.id + '/edit'"
-                   class="group flex flex-col items-center gap-2 p-4 rounded-xl border border-gray-200 dark:border-gray-700
-                          hover:border-blue-300 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all">
-                    <div class="p-2.5 rounded-xl bg-blue-100 dark:bg-blue-900/30 group-hover:bg-blue-200 dark:group-hover:bg-blue-800/40 transition">
-                        <i data-lucide="edit-3" class="w-5 h-5 text-blue-600 dark:text-blue-400"></i>
-                    </div>
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Edit Product</span>
-                </a>
-            @endcan
-
-            @can('products.view')
-                <a :href="'/products/' + $store.productActions.id + '/recipe'"
-                   class="group flex flex-col items-center gap-2 p-4 rounded-xl border border-gray-200 dark:border-gray-700
-                          hover:border-violet-300 dark:hover:border-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-all relative">
-                    <div class="p-2.5 rounded-xl bg-violet-100 dark:bg-violet-900/30 group-hover:bg-violet-200 dark:group-hover:bg-violet-800/40 transition">
-                        <i data-lucide="chef-hat" class="w-5 h-5 text-violet-600 dark:text-violet-400"></i>
-                    </div>
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Recipe</span>
-                    <span class="absolute top-2 right-2 px-1.5 py-0.5 text-[10px] font-semibold rounded-full"
-                          :class="$store.productActions.recipeCount > 0
-                              ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300'
-                              : 'bg-gray-100 dark:bg-gray-700 text-gray-500'"
-                          x-text="$store.productActions.recipeCount > 0 ? $store.productActions.recipeCount : 'None'"></span>
-                </a>
-            @endcan
-
-            @can('products.edit')
-                <button type="button"
-                        @click="$store.productActions.close(); $store.quickAdjust.open($store.productActions.id, $store.productActions.name, $store.productActions.stock)"
-                        class="group flex flex-col items-center gap-2 p-4 rounded-xl border border-gray-200 dark:border-gray-700
-                               hover:border-amber-300 dark:hover:border-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-all">
-                    <div class="p-2.5 rounded-xl bg-amber-100 dark:bg-amber-900/30 group-hover:bg-amber-200 dark:group-hover:bg-amber-800/40 transition">
-                        <i data-lucide="plus-minus" class="w-5 h-5 text-amber-600 dark:text-amber-400"></i>
-                    </div>
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Adjust Stock</span>
-                </button>
-            @endcan
-
-            @can('stock.view')
-                <a :href="'/stock/history?product_id=' + $store.productActions.id"
-                   class="group flex flex-col items-center gap-2 p-4 rounded-xl border border-gray-200 dark:border-gray-700
-                          hover:border-emerald-300 dark:hover:border-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-all">
-                    <div class="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 group-hover:bg-emerald-200 dark:group-hover:bg-emerald-800/40 transition">
-                        <i data-lucide="history" class="w-5 h-5 text-emerald-600 dark:text-emerald-400"></i>
-                    </div>
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Stock History</span>
-                </a>
-            @endcan
-
-            @can('products.delete')
-                <button type="button"
-                        @click="$store.productActions.close(); $store.productActions.confirmDelete()"
-                        class="group flex flex-col items-center gap-2 p-4 rounded-xl border border-gray-200 dark:border-gray-700
-                               hover:border-rose-300 dark:hover:border-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all">
-                    <div class="p-2.5 rounded-xl bg-rose-100 dark:bg-rose-900/30 group-hover:bg-rose-200 dark:group-hover:bg-rose-800/40 transition">
-                        <i data-lucide="trash-2" class="w-5 h-5 text-rose-600 dark:text-rose-400"></i>
-                    </div>
-                    <span class="text-sm font-medium text-rose-600 dark:text-rose-400">Delete</span>
-                </button>
-            @endcan
-        </div>
-
-        {{-- Mobile drag handle --}}
-        <div class="sm:hidden pb-3 flex justify-center">
-            <div class="w-10 h-1 rounded-full bg-gray-300 dark:bg-gray-600"></div>
-        </div>
-    </div>
-</div>
-
-{{-- Hidden delete form for product actions modal --}}
-<form id="product-action-delete-form" method="POST" class="hidden">
-    @csrf
-    @method('DELETE')
-</form>
-
-{{-- Global Delete Confirmation Modal --}}
-@can('products.delete')
-<div
-    x-data
-    x-show="$store.confirm.open"
-    x-cloak
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-    @keydown.escape.window="$store.confirm.close()"
->
-    <div
-        @click.outside="$store.confirm.close()"
-        class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl p-6 w-full max-w-md"
-    >
-        <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 mb-2">Delete product</h2>
-        <p class="text-gray-600 dark:text-gray-300 text-sm mb-6">
-            Are you sure you want to delete this product?
-        </p>
-        <div class="flex justify-end gap-3">
-            <button type="button" class="btn btn-outline" @click="$store.confirm.close()">Cancel</button>
-            <button type="button" class="btn btn-danger" @click="$store.confirm.confirm()">
-                Delete
-            </button>
-        </div>
-    </div>
-</div>
-@endcan
-
-{{-- Bulk Delete Confirmation Modal --}}
-@can('products.delete')
-<div
-    x-data
-    x-show="$store.bulkConfirm.open"
-    x-cloak
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-    @keydown.escape.window="$store.bulkConfirm.open = false"
->
-    <div
-        @click.outside="$store.bulkConfirm.open = false"
-        class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl p-6 w-full max-w-md"
-    >
-        <div class="flex items-center gap-2 mb-2">
-            <div class="p-2 rounded-full bg-rose-100 dark:bg-rose-900/30">
-                <i data-lucide="alert-triangle" class="w-5 h-5 text-rose-600 dark:text-rose-400"></i>
+            <div class="mt-4 p-3.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 text-xs text-amber-800 dark:text-amber-300 space-y-1">
+                <div class="font-semibold flex items-center gap-1.5">
+                    <svg class="w-4 h-4 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                    Stock & Recipe Cascade Notice
+                </div>
+                <p class="text-amber-700 dark:text-amber-400 pl-5">
+                    Deleting this product will remove its catalog record, stock movements, and manufacturing recipes. Current recorded stock is <strong x-text="singleDeleteStock + ' units'"></strong>.
+                </p>
             </div>
-            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Bulk Delete Products</h2>
-        </div>
-        <p class="text-gray-600 dark:text-gray-300 text-sm mb-1">
-            Are you sure you want to delete the selected products?
-        </p>
-        <p class="text-rose-600 dark:text-rose-400 text-xs mb-6">
-            This will also remove their stock movements, recipes, and production references. This action cannot be undone.
-        </p>
-        <div class="flex justify-end gap-3">
-            <button type="button" class="btn btn-outline" @click="$store.bulkConfirm.open = false">Cancel</button>
-            <button type="button" class="btn btn-danger flex items-center gap-1"
-                    @click="$store.bulkConfirm.open = false; document.getElementById('bulk-delete-form').submit()">
-                <i data-lucide="trash-2" class="w-4 h-4"></i>
-                Delete All
-            </button>
-        </div>
-    </div>
-</div>
-@endcan
 
-{{-- Quick Adjust Modal --}}
-@can('products.edit')
-<div
-    x-data
-    x-show="$store.quickAdjust.show"
-    x-cloak
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-    @keydown.escape.window="$store.quickAdjust.close()"
->
-    <div
-        @click.outside="$store.quickAdjust.close()"
-        class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl p-6 w-full max-w-md mx-4"
-    >
-        <div class="flex items-center gap-2 mb-4">
-            <i data-lucide="package" class="w-5 h-5 text-indigo-600 dark:text-indigo-400"></i>
-            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">Quick Stock Adjustment</h2>
-        </div>
-
-        <p class="text-sm text-gray-600 dark:text-gray-300 mb-1">
-            Product: <span class="font-semibold text-gray-900 dark:text-gray-100" x-text="$store.quickAdjust.productName"></span>
-        </p>
-        <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">
-            Current stock: <span class="font-semibold" x-text="$store.quickAdjust.currentStock"></span>
-        </p>
-
-        {{-- Type toggle --}}
-        <div class="flex gap-2 mb-4">
-            <button
-                type="button"
-                class="flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-1.5"
-                :class="$store.quickAdjust.type === 'add'
-                    ? 'bg-emerald-600 text-white shadow-md'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'"
-                @click="$store.quickAdjust.type = 'add'"
-            >
-                <i data-lucide="plus-circle" class="w-4 h-4"></i>
-                Add
-            </button>
-            <button
-                type="button"
-                class="flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-1.5"
-                :class="$store.quickAdjust.type === 'remove'
-                    ? 'bg-rose-600 text-white shadow-md'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'"
-                @click="$store.quickAdjust.type = 'remove'"
-            >
-                <i data-lucide="minus-circle" class="w-4 h-4"></i>
-                Remove
-            </button>
-        </div>
-
-        {{-- Quantity --}}
-        <div class="mb-4">
-            <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">Quantity</label>
-            <input
-                type="number"
-                step="1"
-                min="1"
-                class="form-input w-full"
-                x-model.number="$store.quickAdjust.quantity"
-                placeholder="e.g. 10"
-                @keydown.enter.prevent="$store.quickAdjust.submit()"
-            >
-        </div>
-
-        {{-- Preview --}}
-        <div class="mb-4 p-3 rounded-lg text-sm font-medium"
-            :class="$store.quickAdjust.type === 'add'
-                ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
-                : 'bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300'"
-        >
-            <span x-text="$store.quickAdjust.currentStock"></span>
-            <span x-text="$store.quickAdjust.type === 'add' ? ' + ' : ' − '"></span>
-            <span x-text="$store.quickAdjust.quantity || 0"></span>
-            <span> = </span>
-            <span class="font-bold" x-text="$store.quickAdjust.type === 'add'
-                ? ($store.quickAdjust.currentStock + ($store.quickAdjust.quantity || 0))
-                : Math.max(0, $store.quickAdjust.currentStock - ($store.quickAdjust.quantity || 0))"></span>
-        </div>
-
-        {{-- Notes --}}
-        <div class="mb-5">
-            <label class="block text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">Reason (optional)</label>
-            <textarea
-                class="form-input w-full text-sm"
-                rows="2"
-                x-model="$store.quickAdjust.notes"
-                placeholder="e.g. Physical count, damaged goods…"
-            ></textarea>
-        </div>
-
-        {{-- Error --}}
-        <template x-if="$store.quickAdjust.error">
-            <div class="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm">
-                <span x-text="$store.quickAdjust.error"></span>
+            <div class="mt-6 flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button type="button" @click="singleDeleteModalOpen = false" class="px-4 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700 transition">
+                    Keep Product
+                </button>
+                <form :action="singleDeleteUrl" method="POST">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" class="px-4 py-2 text-xs font-semibold rounded-xl text-white bg-rose-600 hover:bg-rose-500 shadow-sm transition">
+                        Confirm Delete
+                    </button>
+                </form>
             </div>
-        </template>
-
-        {{-- Actions --}}
-        <div class="flex justify-end gap-3">
-            <button type="button" class="btn btn-outline text-sm" @click="$store.quickAdjust.close()">Cancel</button>
-            <button
-                type="button"
-                class="btn text-sm text-white"
-                :class="$store.quickAdjust.type === 'add' ? 'btn-success' : 'btn-danger'"
-                :disabled="$store.quickAdjust.loading || !$store.quickAdjust.quantity || $store.quickAdjust.quantity <= 0"
-                @click="$store.quickAdjust.submit()"
-            >
-                <span x-show="!$store.quickAdjust.loading" class="flex items-center gap-1">
-                    <i data-lucide="check" class="w-4 h-4"></i>
-                    Apply
-                </span>
-                <span x-show="$store.quickAdjust.loading">Saving…</span>
-            </button>
         </div>
     </div>
-</div>
-@endcan
+    @endcan
 
-{{-- Toast Notification --}}
-<div
-    x-data="{ toasts: [] }"
-    x-on:quick-adjust-toast.window="
-        toasts.push({ id: Date.now(), message: $event.detail.message, success: $event.detail.success });
-        setTimeout(() => toasts.shift(), 4000);
-    "
-    class="fixed bottom-6 right-6 z-[60] flex flex-col gap-2"
->
-    <template x-for="toast in toasts" :key="toast.id">
-        <div
-            x-transition:enter="transition ease-out duration-300"
-            x-transition:enter-start="opacity-0 translate-y-2"
-            x-transition:enter-end="opacity-100 translate-y-0"
-            x-transition:leave="transition ease-in duration-200"
-            x-transition:leave-start="opacity-100"
-            x-transition:leave-end="opacity-0"
-            class="px-4 py-3 rounded-lg shadow-lg text-sm font-medium flex items-center gap-2 min-w-[280px]"
-            :class="toast.success
-                ? 'bg-emerald-600 text-white'
-                : 'bg-rose-600 text-white'"
-        >
-            <i :data-lucide="toast.success ? 'check-circle' : 'alert-circle'" class="w-4 h-4"></i>
-            <span x-text="toast.message"></span>
+    {{-- ============================================================ --}}
+    {{-- MODAL 2: BULK DELETE CONFIRMATION MODAL                     --}}
+    {{-- ============================================================ --}}
+    @can('products.delete')
+    <div x-show="$store.bulkConfirm.open"
+         x-cloak
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+
+        <div @click.away="$store.bulkConfirm.open = false"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100 scale-100"
+             x-transition:leave-end="opacity-0 scale-95"
+             class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+
+            <div class="flex items-start gap-4">
+                <div class="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 ring-1 ring-rose-200 dark:ring-rose-800">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                </div>
+                <div class="space-y-1">
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white">
+                        Delete <span x-text="selectedIds.length"></span> Selected Products
+                    </h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                        Are you sure you want to delete these products in bulk?
+                    </p>
+                </div>
+            </div>
+
+            <div class="mt-4 p-3.5 rounded-xl bg-rose-50/80 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/60 text-xs text-rose-800 dark:text-rose-300">
+                This action will delete all selected products along with their stock movement ledgers, recipes, and production allocations.
+            </div>
+
+            <div class="mt-6 flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button type="button" @click="$store.bulkConfirm.open = false" class="px-4 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700 transition">
+                    Cancel
+                </button>
+                <button type="button"
+                        @click="$store.bulkConfirm.open = false; document.getElementById('bulk-delete-form').submit()"
+                        class="px-4 py-2 text-xs font-semibold rounded-xl text-white bg-rose-600 hover:bg-rose-500 shadow-sm transition">
+                    Confirm Bulk Delete
+                </button>
+            </div>
         </div>
-    </template>
+    </div>
+    @endcan
+
+    {{-- ============================================================ --}}
+    {{-- MODAL 3: QUICK STOCK ADJUSTMENT MODAL                       --}}
+    {{-- ============================================================ --}}
+    @can('products.edit')
+    <div x-show="$store.quickAdjust.show"
+         x-cloak
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="transition ease-in duration-150"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+
+        <div @click.away="$store.quickAdjust.close()"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100 scale-100"
+             x-transition:leave-end="opacity-0 scale-95"
+             class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+
+            <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                        </svg>
+                    </span>
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-white">Quick Stock Adjustment</h3>
+                        <p class="text-xs text-slate-400" x-text="$store.quickAdjust.productName"></p>
+                    </div>
+                </div>
+                <button type="button" @click="$store.quickAdjust.close()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="mt-4 space-y-4">
+                {{-- Current Stock display --}}
+                <div class="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                    <span class="text-slate-500">Recorded Warehouse Stock:</span>
+                    <span class="font-mono font-bold text-slate-900 dark:text-white text-sm" x-text="$store.quickAdjust.currentStock"></span>
+                </div>
+
+                {{-- Action Type Switcher --}}
+                <div class="grid grid-cols-2 gap-2">
+                    <button type="button"
+                            @click="$store.quickAdjust.type = 'add'"
+                            class="py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition"
+                            :class="$store.quickAdjust.type === 'add'
+                                ? 'bg-emerald-600 text-white shadow-sm'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                        </svg>
+                        + Add Stock
+                    </button>
+                    <button type="button"
+                            @click="$store.quickAdjust.type = 'remove'"
+                            class="py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition"
+                            :class="$store.quickAdjust.type === 'remove'
+                                ? 'bg-rose-600 text-white shadow-sm'
+                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+                        </svg>
+                        − Remove Stock
+                    </button>
+                </div>
+
+                {{-- Adjustment Quantity --}}
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Adjustment Quantity <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="number" step="1" min="1"
+                           x-model.number="$store.quickAdjust.quantity"
+                           placeholder="Enter quantity to adjust..."
+                           @keydown.enter.prevent="$store.quickAdjust.submit()"
+                           class="w-full text-xs font-mono rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 focus:border-teal-500 focus:ring-teal-500">
+                </div>
+
+                {{-- Live Projected Balance Preview --}}
+                <div class="p-3 rounded-xl text-xs font-medium flex items-center justify-between"
+                     :class="$store.quickAdjust.type === 'add' ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300' : 'bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-300'">
+                    <span>Projected Resulting Balance:</span>
+                    <span class="font-mono font-bold text-sm"
+                          x-text="$store.quickAdjust.type === 'add'
+                            ? ($store.quickAdjust.currentStock + ($store.quickAdjust.quantity || 0))
+                            : Math.max(0, $store.quickAdjust.currentStock - ($store.quickAdjust.quantity || 0))"></span>
+                </div>
+
+                {{-- Reason / Audit Notes --}}
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Reason / Notes (Optional)</label>
+                    <textarea rows="2"
+                              x-model="$store.quickAdjust.notes"
+                              placeholder="e.g. Physical inventory reconciliation, broken bottle, expiry..."
+                              class="w-full text-xs rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 focus:border-teal-500 focus:ring-teal-500"></textarea>
+                </div>
+
+                {{-- Error Banner --}}
+                <template x-if="$store.quickAdjust.error">
+                    <div class="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-xs" x-text="$store.quickAdjust.error"></div>
+                </template>
+
+                <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <button type="button" @click="$store.quickAdjust.close()" class="px-4 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700 transition">
+                        Cancel
+                    </button>
+                    <button type="button"
+                            @click="$store.quickAdjust.submit()"
+                            :disabled="$store.quickAdjust.loading || !$store.quickAdjust.quantity || $store.quickAdjust.quantity <= 0"
+                            class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl text-white bg-teal-600 hover:bg-teal-500 shadow-sm transition disabled:opacity-50">
+                        <span x-show="!$store.quickAdjust.loading">Commit Adjustment</span>
+                        <span x-show="$store.quickAdjust.loading">Updating Stock...</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endcan
+
 </div>
 
 @push('scripts')
-<script src="https://unpkg.com/lucide@latest"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        if (window.lucide) lucide.createIcons();
-    });
-
-    // Bulk selection component
     function bulkSelect() {
         return {
             selectedIds: [],
@@ -804,55 +617,8 @@
     }
 
     document.addEventListener('alpine:init', () => {
-        // Product Actions Modal store
-        Alpine.store('productActions', {
-            show: false,
-            id: null,
-            name: '',
-            stock: 0,
-            recipeCount: 0,
-
-            open(id, name, stock, recipeCount) {
-                this.id = id;
-                this.name = name;
-                this.stock = stock;
-                this.recipeCount = recipeCount;
-                this.show = true;
-            },
-
-            close() {
-                this.show = false;
-            },
-
-            confirmDelete() {
-                const form = document.getElementById('product-action-delete-form');
-                form.action = '/products/' + this.id;
-                Alpine.store('confirm').openWith(form);
-            },
-        });
-
-        // Bulk delete confirm store
         Alpine.store('bulkConfirm', { open: false });
 
-        // Global delete-confirm store (same pattern as sales)
-        Alpine.store('confirm', {
-            open: false,
-            submitEl: null,
-            openWith(form) {
-                this.submitEl = form;
-                this.open = true;
-            },
-            close() {
-                this.open = false;
-                this.submitEl = null;
-            },
-            confirm() {
-                if (this.submitEl) this.submitEl.submit();
-                this.close();
-            },
-        });
-
-        // Quick stock adjustment store
         Alpine.store('quickAdjust', {
             show: false,
             productId: null,
@@ -867,7 +633,7 @@
             open(id, name, stock) {
                 this.productId = id;
                 this.productName = name;
-                this.currentStock = stock;
+                this.currentStock = Number(stock || 0);
                 this.type = 'add';
                 this.quantity = null;
                 this.notes = '';
@@ -886,11 +652,12 @@
                 this.error = '';
 
                 try {
+                    const tokenEl = document.querySelector('meta[name="csrf-token"]');
                     const resp = await fetch(`/products/${this.productId}/quick-adjust`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                            'X-CSRF-TOKEN': tokenEl ? tokenEl.content : '',
                             'Accept': 'application/json',
                         },
                         body: JSON.stringify({
@@ -903,39 +670,28 @@
                     const data = await resp.json();
 
                     if (!resp.ok || !data.success) {
-                        this.error = data.message || 'Something went wrong.';
+                        this.error = data.message || 'Stock adjustment failed.';
                         this.loading = false;
                         return;
                     }
 
-                    // Update the stock cell in the table row
+                    // Update DOM stock cell
                     const row = document.querySelector(`[data-product-id="${this.productId}"]`);
                     if (row) {
-                        const stockCell = row.querySelector('[data-stock]');
-                        if (stockCell) {
-                            stockCell.textContent = Math.round(data.new_stock).toLocaleString();
-                            // Flash the cell
-                            stockCell.closest('td').classList.add('ring-2', 'ring-indigo-400', 'ring-offset-1');
-                            setTimeout(() => {
-                                stockCell.closest('td').classList.remove('ring-2', 'ring-indigo-400', 'ring-offset-1');
-                            }, 2000);
+                        const cell = row.querySelector('[data-stock]');
+                        if (cell) {
+                            cell.textContent = Math.round(data.new_stock).toLocaleString();
+                            cell.classList.add('text-teal-600', 'scale-110');
+                            setTimeout(() => cell.classList.remove('text-teal-600', 'scale-110'), 2500);
                         }
                     }
 
-                    // Toast
-                    window.dispatchEvent(new CustomEvent('quick-adjust-toast', {
-                        detail: { message: `✓ ${data.message}`, success: true }
-                    }));
-
                     this.close();
-                    // Re-init icons for any new content
-                    if (window.lucide) lucide.createIcons();
-
                 } catch (e) {
                     this.error = 'Network error. Please try again.';
                     this.loading = false;
                 }
-            },
+            }
         });
     });
 </script>

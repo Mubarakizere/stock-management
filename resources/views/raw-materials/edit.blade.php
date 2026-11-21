@@ -1,12 +1,12 @@
 @extends('layouts.app')
-@section('title', 'Edit Raw Material')
+@section('title', "Edit Raw Material: {$product->name}")
 
 @section('content')
 @php
-    use Illuminate\Support\Str;
+    use App\Models\Category;
 
     $usableCategories = collect($categories ?? [])
-        ->filter(fn($c) => ($c->is_active ?? true) && ($c->kind ?? '') === 'raw_material')
+        ->filter(fn($c) => ($c->is_active ?? true) && in_array($c->kind ?? '', ['raw_material', 'both']))
         ->values();
 
     $currentCat = $product->category ?? null;
@@ -14,284 +14,398 @@
         ? $usableCategories->contains(fn($c) => (int)$c->id === (int)$product->category_id)
         : false;
 
-    $currentBadge = $currentCat
-        ? ($currentCat->name . (
-            (method_exists($currentCat,'trashed') && $currentCat->trashed()) ? ' (deleted)' :
-            (($currentCat->is_active ?? true) ? '' : ' (inactive)')
-        ))
-        : 'Unknown (missing)';
+    $currentStock = $product->currentStock();
+    $currentUnit = strtolower(old('unit', $product->unit ?? 'kg'));
+    $unitFamilies = $unitFamilies ?? \App\Services\UnitService::getGrouped();
+
+    $recipeCount = $product->usedInRecipes()->count();
 @endphp
 
-<div class="max-w-xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6"
+     x-data="{
+        showDeleteModal: false,
+        price: {{ old('price', $product->cost_price ?: $product->price ?: 0) }},
+        stock: {{ old('stock', $currentStock) }},
+        originalStock: {{ $currentStock }},
+        unit: '{{ $currentUnit }}',
 
-    {{-- Header --}}
-    <div class="flex items-center justify-between pb-1">
-        <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-200/80 dark:border-teal-800/80 flex items-center justify-center text-teal-600 dark:text-teal-400 shadow-sm shrink-0">
-                <i data-lucide="flask-conical" class="w-5 h-5"></i>
+        get stockDiff() {
+            return (parseFloat(this.stock) || 0) - this.originalStock;
+        },
+
+        formatMoney(num) {
+            return (parseFloat(num) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+     }">
+
+    {{-- Breadcrumb & Title --}}
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-slate-200/80 dark:border-slate-800">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                <a href="{{ route('raw-materials.index') }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition">Raw Materials</a>
+                <span>/</span>
+                <span class="text-slate-900 dark:text-white font-semibold">Edit Material</span>
             </div>
-            <div>
-                <h1 class="text-xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">
-                    Edit Raw Material
-                </h1>
-                <p class="text-xs text-gray-500 dark:text-gray-400">
-                    Update raw material information, category, and pricing.
-                </p>
-            </div>
+            <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white mt-1">
+                Edit: {{ $product->name }}
+            </h1>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Update raw material specifications, intake cost, and warehouse inventory balance.
+            </p>
         </div>
 
         <div class="flex items-center gap-2">
             <a href="{{ route('raw-materials.index') }}"
-               class="btn btn-outline text-xs sm:text-sm flex items-center gap-1.5 px-3 py-2 rounded-xl transition shadow-sm">
-                <i data-lucide="arrow-left" class="w-4 h-4"></i>
-                <span>Back</span>
+               class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200/90 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700/80 shadow-sm transition">
+                <svg class="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+                Back to Catalog
             </a>
+
             @can('products.view')
                 <a href="{{ route('raw-materials.show', $product) }}"
-                   class="btn btn-secondary text-xs sm:text-sm flex items-center gap-1.5 px-3 py-2 rounded-xl transition shadow-sm">
-                    <i data-lucide="eye" class="w-4 h-4"></i>
-                    <span>View</span>
+                   class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200/90 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700/80 shadow-sm transition">
+                    <svg class="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                    </svg>
+                    View Dossier
                 </a>
             @endcan
         </div>
     </div>
 
-    @if(!$currentUsable && $currentCat)
-        <div class="rounded-2xl border border-amber-200 dark:border-amber-800/80 bg-amber-50/70 dark:bg-amber-950/30 p-4 shadow-sm">
-            <div class="flex items-start gap-3">
-                <div class="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
-                    <i data-lucide="alert-triangle" class="w-4 h-4"></i>
-                </div>
-                <div class="text-sm">
-                    <h3 class="font-semibold text-amber-900 dark:text-amber-200">Category needs attention</h3>
-                    <p class="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
-                        Current category <span class="font-medium">{{ $currentBadge }}</span>
-                        is not an active Raw Material category. Please select a valid Raw Material category.
-                    </p>
-                </div>
+    {{-- Error Banner --}}
+    @if (($errors ?? null)?->any())
+        <div class="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-xs text-rose-700 dark:text-rose-300 space-y-1 shadow-sm">
+            <div class="font-bold flex items-center gap-1.5">
+                <svg class="w-4 h-4 text-rose-600 dark:text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <span>Please correct the errors below:</span>
             </div>
-        </div>
-    @endif
-
-    @if ($errors->any())
-        <div class="bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/80 text-rose-700 dark:text-rose-300 rounded-2xl p-4 text-sm shadow-sm">
-            <div class="flex items-center gap-2 font-medium">
-                <i data-lucide="alert-circle" class="w-4 h-4 text-rose-600 dark:text-rose-400"></i>
-                <span>Please fix the following:</span>
-            </div>
-            <ul class="list-disc pl-5 mt-2 space-y-1 text-xs">
-                @foreach ($errors->all() as $error)
-                    <li>{{ $error }}</li>
+            <ul class="list-disc pl-5 space-y-0.5">
+                @foreach ($errors->all() as $err)
+                    <li>{{ $err }}</li>
                 @endforeach
             </ul>
         </div>
     @endif
 
-    @cannot('products.edit')
-        <div class="rounded-2xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-5">
-            <div class="flex items-start gap-3">
-                <i data-lucide="shield-alert" class="w-5 h-5 text-amber-500 mt-0.5 shrink-0"></i>
-                <div>
-                    <h2 class="text-sm font-semibold text-amber-800 dark:text-amber-200">
-                        Permission Required
-                    </h2>
-                    <p class="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
-                        You do not have permission to edit raw materials.
-                    </p>
-                </div>
+    {{-- Category Alert if Inactive/Deleted --}}
+    @if(!$currentUsable && $currentCat)
+        <div class="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-3 shadow-sm">
+            <div class="w-8 h-8 rounded-xl bg-amber-100 dark:bg-amber-900/60 text-amber-600 flex items-center justify-center shrink-0">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+            </div>
+            <div class="space-y-1">
+                <div class="font-bold">Category Needs Reassignment</div>
+                <p>The current category is inactive or archived. Please select an active Raw Material category below.</p>
             </div>
         </div>
-    @else
-        <div class="bg-white dark:bg-gray-800 border border-gray-200/80 dark:border-gray-700/80 rounded-2xl shadow-sm p-6 sm:p-7">
-            <form action="{{ route('raw-materials.update', $product) }}" method="POST" class="space-y-5">
-                @csrf
-                @method('PUT')
+    @endif
 
-                {{-- Name --}}
+    <form action="{{ route('raw-materials.update', $product) }}" method="POST" class="space-y-6">
+        @csrf
+        @method('PUT')
+
+        {{-- Card 1: Material Identification --}}
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-6 shadow-sm space-y-5">
+            <div class="flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <span class="w-7 h-7 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold text-xs">
+                    1
+                </span>
                 <div>
-                    <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5" for="name">
+                    <h2 class="text-sm font-bold text-slate-900 dark:text-white">Material Identification</h2>
+                    <p class="text-xs text-slate-400">Name, category assignment, and measurement unit</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                {{-- Material Name --}}
+                <div class="sm:col-span-2">
+                    <label for="name" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
                         Material Name <span class="text-rose-500">*</span>
                     </label>
-                    <div class="relative rounded-xl shadow-sm">
-                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400 dark:text-gray-500">
-                            <i data-lucide="tag" class="w-4 h-4"></i>
-                        </div>
-                        <input id="name" type="text" name="name"
-                            value="{{ old('name', $product->name) }}" required
-                            class="block w-full pl-10 pr-3.5 py-2.5 text-sm rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 dark:focus:ring-teal-400/20 dark:focus:border-teal-400 transition shadow-sm"
-                            placeholder="e.g. Wheat Flour 50kg">
-                    </div>
-                    @error('name')
-                        <p class="text-rose-600 dark:text-rose-400 text-xs mt-1.5 flex items-center gap-1">
-                            <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
-                            <span>{{ $message }}</span>
-                        </p>
-                    @enderror
+                    <input type="text"
+                           id="name"
+                           name="name"
+                           value="{{ old('name', $product->name) }}"
+                           required
+                           class="w-full py-2.5 px-3.5 text-xs rounded-xl border border-slate-200/90 dark:border-slate-700/80 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
                 </div>
 
                 {{-- Category --}}
                 <div>
-                    <div class="flex items-center justify-between mb-1.5">
-                        <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300" for="category_id">
-                            Category <span class="text-rose-500">*</span>
-                        </label>
-                        @can('categories.create')
-                            <a href="{{ route('categories.create', ['kind' => 'raw_material']) }}"
-                               class="text-[11px] font-medium text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 hover:underline flex items-center gap-1">
-                                <i data-lucide="plus" class="w-3 h-3"></i>
-                                <span>New Category</span>
-                            </a>
-                        @endcan
-                    </div>
-                    <div class="relative rounded-xl shadow-sm">
-                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400 dark:text-gray-500">
-                            <i data-lucide="folder" class="w-4 h-4"></i>
-                        </div>
-                        <select id="category_id" name="category_id" required
-                            class="block w-full pl-10 pr-10 py-2.5 text-sm rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 dark:focus:ring-teal-400/20 dark:focus:border-teal-400 transition shadow-sm">
-                            @if(!$currentUsable)
-                                <option value="" selected disabled>
-                                    Current: {{ $currentBadge }} — select a raw material category —
-                                </option>
-                            @else
-                                <option value="" disabled>Select raw material category</option>
-                            @endif
-                            @foreach ($usableCategories as $category)
-                                <option value="{{ $category->id }}"
-                                    {{ (string)old('category_id', $product->category_id) === (string)$category->id ? 'selected' : '' }}>
-                                    {{ $category->name }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-1.5">
-                        Only categories configured for <span class="font-medium text-gray-700 dark:text-gray-300">Raw Material</span> are shown.
-                    </p>
-                    @error('category_id')
-                        <p class="text-rose-600 dark:text-rose-400 text-xs mt-1.5 flex items-center gap-1">
-                            <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
-                            <span>{{ $message }}</span>
-                        </p>
-                    @enderror
-                </div>
-
-                {{-- Price, Stock & Base Unit --}}
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5" for="price">
-                            Cost Price / Unit <span class="text-rose-500">*</span>
-                        </label>
-                        <div class="relative rounded-xl shadow-sm flex">
-                            <span class="inline-flex items-center px-3 rounded-l-xl border border-r-0 border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-xs font-semibold select-none">
-                                RWF
-                            </span>
-                            <input id="price" type="number" step="0.01" min="0" name="price"
-                                value="{{ old('price', $product->cost_price ?: $product->price) }}" required
-                                class="block w-full rounded-r-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 dark:focus:ring-teal-400/20 dark:focus:border-teal-400 transition py-2.5 px-3 text-sm shadow-sm">
-                        </div>
-                        @if($product->last_purchase_price)
-                            <p class="text-[11px] text-teal-600 dark:text-teal-400 mt-1">Last purchase: RWF {{ number_format($product->last_purchase_price, 2) }}</p>
+                    <label for="category_id" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                        Category <span class="text-rose-500">*</span>
+                    </label>
+                    <select id="category_id"
+                            name="category_id"
+                            required
+                            class="w-full py-2.5 px-3 text-xs rounded-xl border border-slate-200/90 dark:border-slate-700/80 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
+                        @if(!$currentUsable)
+                            <option value="" disabled selected>Current: {{ $currentCat->name ?? 'None' }} (Needs Reassignment)</option>
                         @endif
-                        @error('price')
-                            <p class="text-rose-600 dark:text-rose-400 text-xs mt-1.5 flex items-center gap-1">
-                                <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
-                                <span>{{ $message }}</span>
-                            </p>
-                        @enderror
-                    </div>
-
-                    {{-- Base Unit --}}
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5" for="unit">
-                            Base Unit <span class="text-rose-500">*</span>
-                        </label>
-                        <div class="relative rounded-xl shadow-sm">
-                            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400 dark:text-gray-500">
-                                <i data-lucide="scale" class="w-4 h-4"></i>
-                            </div>
-                            <select id="unit" name="unit" required
-                                class="block w-full pl-10 pr-8 py-2.5 text-sm rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 dark:focus:ring-teal-400/20 dark:focus:border-teal-400 transition shadow-sm">
-                                @php
-                                    $currentUnit = strtolower(old('unit', $product->unit ?? 'kg'));
-                                @endphp
-                                <optgroup label="Weight">
-                                    <option value="kg" {{ $currentUnit === 'kg' ? 'selected' : '' }}>Kilogram (kg)</option>
-                                    <option value="g" {{ $currentUnit === 'g' ? 'selected' : '' }}>Gram (g)</option>
-                                    <option value="mg" {{ $currentUnit === 'mg' ? 'selected' : '' }}>Milligram (mg)</option>
-                                </optgroup>
-                                <optgroup label="Volume">
-                                    <option value="l" {{ $currentUnit === 'l' ? 'selected' : '' }}>Liter (L)</option>
-                                    <option value="ml" {{ $currentUnit === 'ml' ? 'selected' : '' }}>Milliliter (ml)</option>
-                                    <option value="cl" {{ $currentUnit === 'cl' ? 'selected' : '' }}>Centiliter (cl)</option>
-                                </optgroup>
-                                <optgroup label="Count / Containers">
-                                    <option value="pcs" {{ $currentUnit === 'pcs' ? 'selected' : '' }}>Piece (pcs)</option>
-                                    <option value="bottle" {{ $currentUnit === 'bottle' ? 'selected' : '' }}>Bottle</option>
-                                    <option value="can" {{ $currentUnit === 'can' ? 'selected' : '' }}>Can</option>
-                                    <option value="cap" {{ $currentUnit === 'cap' ? 'selected' : '' }}>Cap / Lid</option>
-                                    <option value="box" {{ $currentUnit === 'box' ? 'selected' : '' }}>Box</option>
-                                    <option value="pack" {{ $currentUnit === 'pack' ? 'selected' : '' }}>Pack</option>
-                                    <option value="bag" {{ $currentUnit === 'bag' ? 'selected' : '' }}>Bag</option>
-                                    <option value="carton" {{ $currentUnit === 'carton' ? 'selected' : '' }}>Carton</option>
-                                    <option value="crate" {{ $currentUnit === 'crate' ? 'selected' : '' }}>Crate</option>
-                                    <option value="roll" {{ $currentUnit === 'roll' ? 'selected' : '' }}>Roll</option>
-                                </optgroup>
-                            </select>
-                        </div>
-                        @error('unit')
-                            <p class="text-rose-600 dark:text-rose-400 text-xs mt-1.5 flex items-center gap-1">
-                                <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
-                                <span>{{ $message }}</span>
-                            </p>
-                        @enderror
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5" for="stock">
-                            Stock <span class="text-rose-500">*</span>
-                        </label>
-                        <div class="relative rounded-xl shadow-sm">
-                            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400 dark:text-gray-500">
-                                <i data-lucide="boxes" class="w-4 h-4"></i>
-                            </div>
-                            <input id="stock" type="number" step="any" min="0" name="stock"
-                                value="{{ old('stock', $product->stock) }}" required
-                                class="block w-full pl-10 pr-3.5 py-2.5 text-sm rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700/50 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 dark:focus:ring-teal-400/20 dark:focus:border-teal-400 transition shadow-sm">
-                        </div>
-                        @error('stock')
-                            <p class="text-rose-600 dark:text-rose-400 text-xs mt-1.5 flex items-center gap-1">
-                                <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
-                                <span>{{ $message }}</span>
-                            </p>
-                        @enderror
-                    </div>
+                        @foreach ($usableCategories as $cat)
+                            <option value="{{ $cat->id }}" {{ (string)old('category_id', $product->category_id) === (string)$cat->id ? 'selected' : '' }}>
+                                {{ $cat->name }}
+                            </option>
+                        @endforeach
+                    </select>
                 </div>
 
-                {{-- Actions --}}
-                <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-700/80">
-                    <a href="{{ route('raw-materials.index') }}"
-                       class="px-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/60 text-sm font-medium transition shadow-sm">
-                        Cancel
-                    </a>
-                    <button type="submit"
-                            class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-medium shadow-sm hover:shadow transition-all">
-                        <i data-lucide="check" class="w-4 h-4"></i>
-                        <span>Update Raw Material</span>
-                    </button>
+                {{-- Base Unit --}}
+                <div>
+                    <label for="unit" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                        Base Measurement Unit <span class="text-rose-500">*</span>
+                    </label>
+                    <select id="unit"
+                            name="unit"
+                            x-model="unit"
+                            required
+                            class="w-full py-2.5 px-3 text-xs rounded-xl border border-slate-200/90 dark:border-slate-700/80 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
+                        @foreach($unitFamilies as $familyKey => $family)
+                            <optgroup label="{{ $family['label'] }}">
+                                @foreach($family['units'] as $uKey => $uData)
+                                    <option value="{{ $uKey }}" {{ $currentUnit === $uKey ? 'selected' : '' }}>
+                                        {{ $uData['label'] }}
+                                    </option>
+                                @endforeach
+                            </optgroup>
+                        @endforeach
+                    </select>
                 </div>
-            </form>
+            </div>
         </div>
-    @endcannot
-</div>
 
-@push('scripts')
-<script src="https://unpkg.com/lucide@latest"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-        if (window.lucide && typeof window.lucide.createIcons === 'function') {
-            window.lucide.createIcons();
-        }
-    });
-</script>
-@endpush
+        {{-- Card 2: Cost Price per Unit --}}
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-6 shadow-sm space-y-5">
+            <div class="flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <span class="w-7 h-7 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold text-xs">
+                    2
+                </span>
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900 dark:text-white">Pricing & Cost Strategy</h2>
+                    <p class="text-xs text-slate-400">Baseline unit cost used for intake purchases and recipe calculations</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                {{-- Cost Price / Unit --}}
+                <div>
+                    <label for="price" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                        Unit Cost Price <span class="text-rose-500">*</span>
+                    </label>
+                    <div class="relative">
+                        <input type="number"
+                               step="0.01"
+                               min="0"
+                               id="price"
+                               name="price"
+                               x-model.number="price"
+                               required
+                               class="w-full py-2.5 pl-3.5 pr-14 text-xs font-mono rounded-xl border border-slate-200/90 dark:border-slate-700/80 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
+                        <span class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-xs font-medium text-slate-400 pointer-events-none">
+                            RWF
+                        </span>
+                    </div>
+                    @if($product->last_purchase_price)
+                        <p class="mt-1 text-[11px] text-teal-600 dark:text-teal-400 font-mono">
+                            Last purchase inflow: RWF {{ number_format($product->last_purchase_price, 2) }}
+                        </p>
+                    @endif
+                </div>
+
+                {{-- Live Cost Preview Pill --}}
+                <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex flex-col justify-center">
+                    <span class="text-[11px] text-slate-500 dark:text-slate-400">Current Unit Cost:</span>
+                    <div class="text-lg font-bold font-mono text-slate-900 dark:text-white mt-0.5">
+                        <span x-text="formatMoney(price)"></span> <span class="text-xs font-sans font-normal text-slate-400">RWF / <span x-text="unit"></span></span>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Downstream Recipe Notice --}}
+            @if($recipeCount > 0)
+                <div class="p-3.5 rounded-xl bg-indigo-50/60 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 flex items-start gap-3 text-xs text-indigo-900 dark:text-indigo-200">
+                    <svg class="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <div>
+                        <span class="font-bold">Downstream BOM Synchronization:</span>
+                        This raw material is currently consumed by <span class="font-bold underline">{{ $recipeCount }} finished product recipe(s)</span>. Updating this cost price will automatically re-estimate downstream manufacturing costs and suggested selling prices.
+                    </div>
+                </div>
+            @endif
+        </div>
+
+        {{-- Card 3: Warehouse Physical Inventory --}}
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-6 shadow-sm space-y-5">
+            <div class="flex items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <span class="w-7 h-7 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold text-xs">
+                    3
+                </span>
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900 dark:text-white">Physical Warehouse Inventory</h2>
+                    <p class="text-xs text-slate-400">Recorded warehouse inventory balance with automatic movement discrepancy logging</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                {{-- Physical Stock Input --}}
+                <div>
+                    <label for="stock" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                        Physical Stock Level <span class="text-rose-500">*</span>
+                    </label>
+                    <div class="relative">
+                        <input type="number"
+                               step="0.01"
+                               min="0"
+                               id="stock"
+                               name="stock"
+                               x-model.number="stock"
+                               required
+                               class="w-full py-2.5 pl-3.5 pr-14 text-xs font-mono rounded-xl border border-slate-200/90 dark:border-slate-700/80 bg-slate-50/50 dark:bg-slate-800/50 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
+                        <span class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-xs font-medium text-slate-400 pointer-events-none" x-text="unit"></span>
+                    </div>
+                    <p class="mt-1 text-[11px] text-slate-400">
+                        Current recorded balance: <span class="font-mono font-semibold text-slate-700 dark:text-slate-300">{{ number_format($currentStock, 2) }} {{ $currentUnit }}</span>.
+                    </p>
+                </div>
+
+                {{-- Live Stock Variance Indicator --}}
+                <div class="p-3.5 rounded-xl border flex flex-col justify-center"
+                     :class="stockDiff > 0 ? 'bg-emerald-50/60 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-900/40' : (stockDiff < 0 ? 'bg-rose-50/60 dark:bg-rose-950/30 border-rose-100 dark:border-rose-900/40' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800')">
+                    <span class="text-[11px] font-medium"
+                          :class="stockDiff > 0 ? 'text-emerald-700 dark:text-emerald-300' : (stockDiff < 0 ? 'text-rose-700 dark:text-rose-300' : 'text-slate-500')">
+                        Inventory Variance:
+                    </span>
+                    <div class="text-lg font-bold font-mono mt-0.5"
+                         :class="stockDiff > 0 ? 'text-emerald-900 dark:text-emerald-200' : (stockDiff < 0 ? 'text-rose-900 dark:text-rose-200' : 'text-slate-900 dark:text-white')">
+                        <span x-text="stockDiff > 0 ? `+${stockDiff.toFixed(2)}` : (stockDiff < 0 ? `${stockDiff.toFixed(2)}` : '0.00')"></span>
+                        <span class="text-xs font-sans font-normal text-slate-400" x-text="unit"></span>
+                    </div>
+                    <span class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5"
+                          x-text="stockDiff > 0 ? 'Will log an automatic intake adjustment movement' : (stockDiff < 0 ? 'Will log an automatic deduction adjustment movement' : 'Stock balance unchanged')">
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        {{-- Form Actions Bar --}}
+        <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-200/80 dark:border-slate-800">
+            <a href="{{ route('raw-materials.index') }}"
+               class="px-4 py-2.5 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200/90 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 transition">
+                Cancel
+            </a>
+
+            <button type="submit"
+                    class="inline-flex items-center gap-1.5 px-5 py-2.5 text-xs font-semibold rounded-xl text-white bg-teal-600 hover:bg-teal-700 active:bg-teal-800 shadow-sm transition">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                Update Raw Material
+            </button>
+        </div>
+    </form>
+
+    {{-- Danger Zone: Dedicated Delete Section --}}
+    @can('products.delete')
+        <div class="bg-rose-50/40 dark:bg-rose-950/20 border border-rose-200/70 dark:border-rose-900/50 rounded-2xl p-6 shadow-sm">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div class="space-y-1">
+                    <h3 class="text-sm font-bold text-rose-900 dark:text-rose-200 flex items-center gap-2">
+                        <svg class="w-4 h-4 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                        Danger Zone: Remove Raw Material
+                    </h3>
+                    <p class="text-xs text-rose-700/80 dark:text-rose-300/80 leading-relaxed max-w-xl">
+                        Deleting this raw material removes it from your catalog and detaches it from all finished product recipes. This action cannot be reversed.
+                    </p>
+                </div>
+
+                <button type="button"
+                        @click="showDeleteModal = true"
+                        class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl text-rose-700 bg-white border border-rose-300 hover:bg-rose-50 dark:bg-slate-900 dark:text-rose-400 dark:border-rose-800 dark:hover:bg-rose-950/50 transition shadow-sm self-start sm:self-auto">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                    Delete Raw Material
+                </button>
+            </div>
+        </div>
+
+        {{-- Delete Confirmation Modal --}}
+        <div x-show="showDeleteModal"
+             x-cloak
+             class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-150"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0">
+
+            <div @click.outside="showDeleteModal = false"
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 scale-95"
+                 x-transition:enter-end="opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-150"
+                 x-transition:leave-start="opacity-100 scale-100"
+                 x-transition:leave-end="opacity-0 scale-95"
+                 class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800 space-y-5">
+
+                <div class="flex items-start gap-3.5">
+                    <div class="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                    </div>
+                    <div class="space-y-1">
+                        <h3 class="text-base font-bold text-slate-900 dark:text-white">
+                            Delete Raw Material
+                        </h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                            Are you certain you want to delete <span class="font-semibold text-slate-900 dark:text-white">{{ $product->name }}</span>?
+                        </p>
+                    </div>
+                </div>
+
+                @if($recipeCount > 0)
+                    <div class="rounded-xl border border-amber-200/80 dark:border-amber-800/80 bg-amber-50/70 dark:bg-amber-950/30 p-3 text-xs text-amber-800 dark:text-amber-300">
+                        <div class="font-semibold flex items-center gap-1.5">
+                            <svg class="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                            </svg>
+                            <span>Active BOM Recipe Warning</span>
+                        </div>
+                        <p class="mt-1">
+                            This ingredient is currently consumed by <span class="font-bold">{{ $recipeCount }} product recipe(s)</span>. Deleting it will detach it from all manufacturing bills of materials.
+                        </p>
+                    </div>
+                @endif
+
+                <form action="{{ route('raw-materials.destroy', $product) }}" method="POST" class="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2.5">
+                    @csrf
+                    @method('DELETE')
+                    <button type="button"
+                            @click="showDeleteModal = false"
+                            class="px-4 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200/90 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 transition">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                            class="px-4 py-2 text-xs font-semibold rounded-xl text-white bg-rose-600 hover:bg-rose-700 active:bg-rose-800 transition shadow-sm">
+                        Confirm Delete
+                    </button>
+                </form>
+            </div>
+        </div>
+    @endcan
+
+</div>
 @endsection

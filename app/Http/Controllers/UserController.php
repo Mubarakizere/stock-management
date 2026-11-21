@@ -17,7 +17,7 @@ class UserController extends Controller
     {
         $query = User::query()->with('roles')->latest('id');
 
-        //  Search by name or email
+        // Search by name or email
         if ($search = $request->input('search')) {
             $query->where(fn($q) =>
                 $q->where('name', 'like', "%{$search}%")
@@ -30,10 +30,29 @@ class UserController extends Controller
             $query->whereHas('roles', fn($q) => $q->where('name', $role));
         }
 
-        $users = $query->paginate(10)->withQueryString();
+        $users = $query->paginate(15)->withQueryString();
         $roles = Role::pluck('name')->toArray();
 
-        return view('users.index', compact('users', 'roles'));
+        $stats = [
+            'total'       => User::count(),
+            'admins'      => User::whereHas('roles', fn($q) => $q->where('name', 'admin'))->count(),
+            'managers'    => User::whereHas('roles', fn($q) => $q->where('name', 'manager'))->count(),
+            'operational' => User::whereHas('roles', fn($q) => $q->whereIn('name', ['cashier', 'accountant']))->count(),
+        ];
+
+        if ($request->ajax() && !$request->wantsJson()) {
+            return view('users._table', compact('users'))->render();
+        }
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'users' => $users,
+                'roles' => $roles,
+                'stats' => $stats,
+            ]);
+        }
+
+        return view('users.index', compact('users', 'roles', 'stats'));
     }
 
     /**

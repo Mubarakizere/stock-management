@@ -8,31 +8,38 @@
 
 <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 
-    {{-- Header --}}
-    <div class="flex items-center justify-between gap-3">
+    {{-- Breadcrumb & Back --}}
+    <div class="flex items-center justify-between gap-4">
         <div>
-            <div class="flex items-center gap-2">
-                <i data-lucide="user-plus" class="w-6 h-6 text-indigo-600 dark:text-indigo-400"></i>
-                <h1 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                    Add Customer
-                </h1>
+            <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mb-1">
+                <a href="{{ route('customers.index') }}" class="hover:text-slate-800 dark:hover:text-slate-200 transition">Customers</a>
+                <span>/</span>
+                <span class="text-slate-700 dark:text-slate-300 font-medium">New Account</span>
             </div>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Store basic details so you can easily find and contact this customer later.
+            <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">Register Customer</h1>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Add client contact and billing credentials for invoicing, sales orders, and credit facilities.
             </p>
         </div>
 
-        <a href="{{ route('customers.index') }}" class="btn btn-secondary flex items-center gap-1 text-sm">
-            <i data-lucide="arrow-left" class="w-4 h-4"></i>
-            <span>Back</span>
+        <a href="{{ route('customers.index') }}" class="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200/90 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700/80 shadow-sm transition">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            Cancel
         </a>
     </div>
 
-    {{-- Validation summary --}}
-    @if ($errors->any())
-        <div class="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/30 p-4 text-red-700 dark:text-red-200 text-sm">
-            <div class="font-medium">Please fix the following errors:</div>
-            <ul class="mt-2 list-disc pl-5 space-y-1">
+    {{-- Errors --}}
+    @if (($errors ?? null)?->any())
+        <div class="rounded-2xl border border-rose-200 dark:border-rose-900 bg-rose-50/80 dark:bg-rose-950/30 p-4 text-xs text-rose-800 dark:text-rose-300 space-y-1 shadow-sm">
+            <div class="font-semibold flex items-center gap-1.5">
+                <svg class="w-4 h-4 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                Please correct the following errors:
+            </div>
+            <ul class="list-disc pl-5 space-y-0.5">
                 @foreach ($errors->all() as $error)
                     <li>{{ $error }}</li>
                 @endforeach
@@ -40,150 +47,140 @@
         </div>
     @endif
 
-    {{-- Permission gate (UI level, real protection is in routes middleware) --}}
-    @can('customers.create')
+    @cannot('customers.create')
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-8 text-center">
+            <p class="text-sm font-semibold text-slate-800 dark:text-slate-200">Permission Required</p>
+            <p class="text-xs text-slate-400 mt-1">You do not have permission to register new customer accounts.</p>
+        </div>
+    @elsecan('customers.create')
 
-        {{-- Card --}}
-        <div class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm">
+        {{-- Form Card --}}
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl shadow-sm overflow-hidden">
             <form action="{{ route('customers.store') }}" method="POST" novalidate>
                 @csrf
 
-                <div class="p-6 space-y-6">
-
-                    {{-- Small note --}}
-                    <p class="text-xs text-gray-500 dark:text-gray-400">
-                        Fields marked with <span class="text-red-600">*</span> are required.
-                    </p>
-
+                <div class="p-6 space-y-5">
                     {{-- Name --}}
                     <div>
-                        <label for="name" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Name <span class="text-red-600">*</span>
+                        <label for="name" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                            Customer / Company Name <span class="text-rose-500">*</span>
                         </label>
-                        <input
-                            id="name"
-                            type="text"
-                            name="name"
-                            value="{{ old('name') }}"
-                            required
-                            autocomplete="name"
-                            placeholder="e.g. John Doe"
-                            class="mt-1 w-full form-input"
-                        >
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-3 flex items-center text-slate-400 pointer-events-none">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                                </svg>
+                            </span>
+                            <input
+                                id="name"
+                                type="text"
+                                name="name"
+                                value="{{ old('name') }}"
+                                required
+                                autocomplete="name"
+                                placeholder="e.g. Jean Pierre Ndungutse or Prime Logistics Ltd"
+                                class="w-full pl-9 text-xs rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 placeholder-slate-400 focus:border-teal-500 focus:ring-teal-500"
+                            >
+                        </div>
                         @error('name')
-                            <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>
+                            <p class="mt-1 text-[11px] text-rose-600 dark:text-rose-400">{{ $message }}</p>
                         @enderror
                     </div>
 
-                    {{-- Email & Phone --}}
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {{-- Contact Grid: Email & Phone --}}
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {{-- Phone --}}
                         <div>
-                            <label for="email" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Email
+                            <label for="phone" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                                Phone Number
                             </label>
-                            <input
-                                id="email"
-                                type="email"
-                                name="email"
-                                value="{{ old('email') }}"
-                                autocomplete="email"
-                                placeholder="e.g. customer@example.com"
-                                class="mt-1 w-full form-input"
-                            >
-                            @error('email')
-                                <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-3 flex items-center text-slate-400 pointer-events-none">
+                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                                    </svg>
+                                </span>
+                                <input
+                                    id="phone"
+                                    type="text"
+                                    name="phone"
+                                    value="{{ old('phone') }}"
+                                    autocomplete="tel"
+                                    placeholder="+250 788 123 456"
+                                    class="w-full pl-9 font-mono text-xs rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 placeholder-slate-400 focus:border-teal-500 focus:ring-teal-500"
+                                >
+                            </div>
+                            @error('phone')
+                                <p class="mt-1 text-[11px] text-rose-600 dark:text-rose-400">{{ $message }}</p>
                             @enderror
-                            <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">
-                                Optional, but useful for sending invoices or receipts.
-                            </p>
+                            <p class="mt-1 text-[11px] text-slate-400">Used for transaction SMS, receipts, and order tracking.</p>
                         </div>
 
+                        {{-- Email --}}
                         <div>
-                            <label for="phone" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Phone
+                            <label for="email" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                                Email Address
                             </label>
-                            <input
-                                id="phone"
-                                type="text"
-                                name="phone"
-                                value="{{ old('phone') }}"
-                                autocomplete="tel"
-                                placeholder="e.g. +250 7xx xxx xxx"
-                                class="mt-1 w-full form-input"
-                            >
-                            @error('phone')
-                                <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>
+                            <div class="relative">
+                                <span class="absolute inset-y-0 left-3 flex items-center text-slate-400 pointer-events-none">
+                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                                    </svg>
+                                </span>
+                                <input
+                                    id="email"
+                                    type="email"
+                                    name="email"
+                                    value="{{ old('email') }}"
+                                    autocomplete="email"
+                                    placeholder="client@domain.rw"
+                                    class="w-full pl-9 text-xs rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 placeholder-slate-400 focus:border-teal-500 focus:ring-teal-500"
+                                >
+                            </div>
+                            @error('email')
+                                <p class="mt-1 text-[11px] text-rose-600 dark:text-rose-400">{{ $message }}</p>
                             @enderror
-                            <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">
-                                Optional, but helps when you need to follow up.
-                            </p>
+                            <p class="mt-1 text-[11px] text-slate-400">Electronic invoice delivery and statements.</p>
                         </div>
                     </div>
 
                     {{-- Address --}}
                     <div>
-                        <label for="address" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Address
+                        <label for="address" class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                            Physical Location / Billing Address
                         </label>
-                        <textarea
-                            id="address"
-                            name="address"
-                            rows="3"
-                            placeholder="e.g. Kigali, Remera – near XYZ"
-                            class="mt-1 w-full form-textarea"
-                        >{{ old('address') }}</textarea>
+                        <div class="relative">
+                            <textarea
+                                id="address"
+                                name="address"
+                                rows="3"
+                                placeholder="e.g. Kigali, Nyarugenge, KN 4 Ave, Building B, 2nd Floor"
+                                class="w-full text-xs rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 placeholder-slate-400 focus:border-teal-500 focus:ring-teal-500"
+                            >{{ old('address') }}</textarea>
+                        </div>
                         @error('address')
-                            <p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ $message }}</p>
+                            <p class="mt-1 text-[11px] text-rose-600 dark:text-rose-400">{{ $message }}</p>
                         @enderror
-                        <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">
-                            Optional, but can be handy for deliveries or visits.
-                        </p>
+                        <p class="mt-1 text-[11px] text-slate-400">Delivery point, province/district, or warehouse address.</p>
                     </div>
                 </div>
 
-                {{-- Footer actions --}}
-                <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/40">
-                    <a href="{{ route('customers.index') }}" class="btn btn-outline">
+                {{-- Action Footer --}}
+                <div class="flex items-center justify-between px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                    <a href="{{ route('customers.index') }}" class="px-4 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700 transition">
                         Cancel
                     </a>
 
-                    {{-- submit button also guarded by permission, for consistency --}}
-                    @can('customers.create')
-                        <button type="submit" class="btn btn-success flex items-center gap-1">
-                            <i data-lucide="save" class="w-4 h-4"></i>
-                            <span>Save Customer</span>
-                        </button>
-                    @endcan
+                    <button type="submit" class="inline-flex items-center gap-2 px-5 py-2 text-xs font-semibold rounded-xl text-white bg-teal-600 hover:bg-teal-500 shadow-sm transition">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Save Customer Account
+                    </button>
                 </div>
             </form>
         </div>
 
-    @else
-        {{-- Fallback if somehow user hits this page without permission --}}
-        <div class="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-6">
-            <div class="flex items-start gap-3">
-                <i data-lucide="shield-alert" class="w-5 h-5 text-amber-500 mt-0.5"></i>
-                <div>
-                    <h2 class="text-sm font-semibold text-amber-800 dark:text-amber-200">
-                        You don’t have permission to add customers.
-                    </h2>
-                    <p class="mt-1 text-xs text-amber-700 dark:text-amber-300">
-                        Please contact your administrator if you believe this is a mistake.
-                    </p>
-                </div>
-            </div>
-        </div>
-    @endcan
+    @endcannot
 </div>
 @endsection
-
-@push('scripts')
-<script defer src="https://unpkg.com/lucide@latest"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-        if (window.lucide && typeof window.lucide.createIcons === 'function') {
-            window.lucide.createIcons();
-        }
-    });
-</script>
-@endpush

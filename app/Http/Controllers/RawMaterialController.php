@@ -26,7 +26,7 @@ class RawMaterialController extends Controller
 
         $query = Product::query()
             ->rawMaterials()
-            ->with(['category' => fn($q) => $q->withTrashed()])
+            ->with(['category' => fn($q) => $q->withTrashed(), 'usedInRecipes'])
             ->withSum(['stockMovements as qty_in' => fn($q) => $q->where('type', 'in')], 'quantity')
             ->withSum(['stockMovements as qty_out' => fn($q) => $q->where('type', 'out')], 'quantity')
             ->withMax('stockMovements as last_moved_at', 'created_at');
@@ -66,6 +66,22 @@ class RawMaterialController extends Controller
         }
 
         $products = $query->orderBy('name')->paginate($perPage)->appends($request->query());
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'html' => view('raw-materials._table', compact('products', 'threshold'))->render(),
+                'pagination' => $products->links()->toHtml(),
+                'stats' => [
+                    'count' => $products->total(),
+                    'page_count' => $products->count(),
+                    'units' => number_format($products->getCollection()->sum(fn($p) => max(0, (float)($p->qty_in ?? 0) - (float)($p->qty_out ?? 0))), 2),
+                    'value' => number_format($products->getCollection()->sum(function($p){
+                        $units = max(0, (float)($p->qty_in ?? 0) - (float)($p->qty_out ?? 0));
+                        return $units * (float)($p->cost_price ?: $p->price ?: 0);
+                    }), 2),
+                ]
+            ]);
+        }
 
         return view('raw-materials.index', compact('products', 'categories', 'threshold'));
     }
@@ -146,8 +162,9 @@ class RawMaterialController extends Controller
         $product = $raw_material;
         $product->load([
             'category' => fn($q) => $q->withTrashed(),
+            'usedInRecipes.product' => fn($q) => $q->with('category'),
             'stockMovements' => function ($q) {
-                $q->latest()->take(10)->with('user');
+                $q->latest()->take(15)->with('user');
             }
         ]);
 
@@ -259,12 +276,54 @@ class RawMaterialController extends Controller
     public function destroy(Product $raw_material)
     {
         try {
+            DB::beginTransaction();
+
+            \App\Models\ProductRecipe::where('raw_material_id', $raw_material->id)->delete();
+            \App\Models\ProductionMaterial::where('raw_material_id', $raw_material->id)->delete();
+            $raw_material->stockMovements()->delete();
             $raw_material->delete();
+
+            DB::commit();
             Log::info('Raw material deleted', ['product_id' => $raw_material->id]);
             return redirect()->route('raw-materials.index')->with('success', 'Raw material deleted successfully.');
         } catch (\Throwable $e) {
+            DB::rollBack();
             Log::error('Raw material delete failed', ['error' => $e->getMessage()]);
             return back()->withErrors(['error' => 'Failed to delete raw material: ' . $e->getMessage()]);
+        }
+    }
+
+    /** Bulk delete selected raw materials */
+    public function bulkDestroy(Request $request)
+    {
+        $request->validate([
+            'ids'   => ['required', 'array', 'min:1'],
+            'ids.*' => ['integer', 'exists:products,id'],
+        ]);
+
+        $ids = $request->input('ids');
+
+        try {
+            DB::beginTransaction();
+
+            $materials = Product::rawMaterials()->whereIn('id', $ids)->get();
+            $count = $materials->count();
+
+            foreach ($materials as $material) {
+                \App\Models\ProductRecipe::where('raw_material_id', $material->id)->delete();
+                \App\Models\ProductionMaterial::where('raw_material_id', $material->id)->delete();
+                $material->stockMovements()->delete();
+                $material->delete();
+            }
+
+            DB::commit();
+
+            Log::info('Raw materials bulk deleted', ['count' => $count, 'ids' => $ids]);
+            return redirect()->route('raw-materials.index')->with('success', "{$count} raw material(s) deleted successfully.");
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('Bulk delete failed', ['error' => $e->getMessage()]);
+            return back()->withErrors(['error' => 'Bulk delete failed: ' . $e->getMessage()]);
         }
     }
 }

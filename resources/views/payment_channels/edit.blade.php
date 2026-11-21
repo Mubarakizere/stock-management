@@ -1,48 +1,286 @@
-<x-app-layout>
-    <x-slot name="header">
-        <h2 class="font-semibold text-xl text-gray-800 leading-tight">
-            {{ __('Edit Payment Channel') }}
-        </h2>
-    </x-slot>
+@extends('layouts.app')
+@section('title', 'Edit Payment Channel - ' . $paymentChannel->name)
 
-    <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                <div class="p-6 text-gray-900">
-                    <form action="{{ route('payment-channels.update', $paymentChannel) }}" method="POST">
-                        @csrf
-                        @method('PUT')
-                        <div class="mb-4">
-                            <label for="name" class="block text-sm font-medium text-gray-700">Name</label>
-                            <input type="text" name="name" id="name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" value="{{ old('name', $paymentChannel->name) }}" required>
-                            @error('name')
-                                <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
-                            @enderror
-                        </div>
+@section('content')
+<div x-data="{
+        name: '{{ old('name', addslashes($paymentChannel->name)) }}',
+        slug: '{{ old('slug', addslashes($paymentChannel->slug)) }}',
+        description: `{{ old('description', addslashes($paymentChannel->description ?? '')) }}`,
+        isActive: {{ old('is_active', $paymentChannel->is_active ? '1' : '0') == '1' ? 'true' : 'false' }},
+        txCount: {{ $paymentChannel->tx_count ?? 0 }},
+        txVolume: {{ (float)($paymentChannel->tx_volume ?? 0) }},
 
-                        <div class="mb-4">
-                            <label for="description" class="block text-sm font-medium text-gray-700">Description</label>
-                            <textarea name="description" id="description" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">{{ old('description', $paymentChannel->description) }}</textarea>
-                            @error('description')
-                                <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
-                            @enderror
-                        </div>
+        get channelType() {
+            const str = (this.name + ' ' + this.slug).toLowerCase();
+            if (str.includes('cash')) return 'cash';
+            if (str.includes('bank') || str.includes('zigama')) return 'bank';
+            if (str.includes('momo') || str.includes('mobile') || str.includes('mtn')) return 'mobile_money';
+            if (str.includes('airtel')) return 'airtel';
+            if (str.includes('gift')) return 'gift';
+            return 'gateway';
+        }
+     }"
+     class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 
-                        <div class="mb-4">
-                            <label for="is_active" class="inline-flex items-center">
-                                <input type="hidden" name="is_active" value="0">
-                                <input type="checkbox" name="is_active" id="is_active" value="1" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" {{ old('is_active', $paymentChannel->is_active) ? 'checked' : '' }}>
-                                <span class="ml-2 text-sm text-gray-600">Active</span>
-                            </label>
-                        </div>
+    {{-- Breadcrumbs & Header --}}
+    <div>
+        <div class="flex items-center gap-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider mb-1">
+            <a href="{{ route('payment-channels.index') }}" class="hover:underline">Payment Gateways</a>
+            <span>/</span>
+            <span>Edit Gateway #{{ $paymentChannel->id }}</span>
+        </div>
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+                <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2.5">
+                    <div class="p-2.5 rounded-2xl bg-indigo-600 text-white shadow-md shadow-indigo-600/30">
+                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                    </div>
+                    <span>Edit Payment Gateway: {{ $paymentChannel->name }}</span>
+                </h1>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                    Update payment method parameters, operational status, or settlement descriptions.
+                </p>
+            </div>
 
-                        <div class="flex justify-end">
-                            <a href="{{ route('payment-channels.index') }}" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-md mr-2 hover:bg-gray-300">Cancel</a>
-                            <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700">Update</button>
+            <a href="{{ route('payment-channels.index') }}"
+               class="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/60 shadow-xs transition">
+                <svg class="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+                <span>Back to Gateways</span>
+            </a>
+        </div>
+    </div>
+
+    {{-- Main Grid --}}
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {{-- Left: Form Card (2 cols) --}}
+        <div class="lg:col-span-2">
+            <form action="{{ route('payment-channels.update', $paymentChannel) }}" method="POST" class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs p-6 space-y-6">
+                @csrf
+                @method('PUT')
+
+                {{-- Name --}}
+                <div>
+                    <label for="name" class="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider mb-1.5">
+                        Gateway / Channel Name <span class="text-rose-500">*</span>
+                    </label>
+                    <div class="relative">
+                        <input type="text"
+                               name="name"
+                               id="name"
+                               x-model="name"
+                               required
+                               placeholder="e.g. MTN Mobile Money, Bank of Kigali, Cash Desk"
+                               class="w-full px-4 py-2.5 rounded-xl text-sm bg-slate-50 dark:bg-slate-800/60 border @error('name') border-rose-500 @else border-slate-300 dark:border-slate-700 @enderror text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition" />
+                    </div>
+                    @error('name')
+                        <p class="text-xs text-rose-500 mt-1.5 font-medium">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                {{-- Slug --}}
+                <div>
+                    <label for="slug" class="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider mb-1.5">
+                        System Slug / Key <span class="text-rose-500">*</span>
+                    </label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 font-mono text-xs">
+                            #
                         </div>
-                    </form>
+                        <input type="text"
+                               name="slug"
+                               id="slug"
+                               x-model="slug"
+                               placeholder="e.g. mtn-momo, bank-of-kigali"
+                               class="w-full pl-8 pr-4 py-2.5 rounded-xl text-sm font-mono bg-slate-50 dark:bg-slate-800/60 border @error('slug') border-rose-500 @else border-slate-300 dark:border-slate-700 @enderror text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition" />
+                    </div>
+                    @error('slug')
+                        <p class="text-xs text-rose-500 mt-1.5 font-medium">{{ $message }}</p>
+                    @enderror
+                    @if(($paymentChannel->tx_count ?? 0) > 0)
+                        <div class="flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400 mt-1.5 font-medium">
+                            <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            <span>Caution: Modifying the slug will affect queries linking historic transactions recorded under "<code>{{ $paymentChannel->slug }}</code>".</span>
+                        </div>
+                    @else
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                            Internal identifier used in API integrations and transaction database records.
+                        </p>
+                    @endif
+                </div>
+
+                {{-- Description --}}
+                <div>
+                    <label for="description" class="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider mb-1.5">
+                        Description / Settlement Notes
+                    </label>
+                    <textarea name="description"
+                              id="description"
+                              rows="3"
+                              x-model="description"
+                              placeholder="e.g. Merchant code 123456, settlement to main corporate account, handled by Head Cashier..."
+                              class="w-full px-4 py-2.5 rounded-xl text-sm bg-slate-50 dark:bg-slate-800/60 border @error('description') border-rose-500 @else border-slate-300 dark:border-slate-700 @enderror text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"></textarea>
+                    @error('description')
+                        <p class="text-xs text-rose-500 mt-1.5 font-medium">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                {{-- Operational Active Toggle --}}
+                <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <span>Operational Status</span>
+                            <span :class="isActive ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300' : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300'"
+                                  class="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                                  x-text="isActive ? 'Live & Active' : 'Paused'"></span>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            When active, this channel appears in POS checkout options and financial payment dropdowns.
+                        </p>
+                    </div>
+
+                    <input type="hidden" name="is_active" :value="isActive ? '1' : '0'">
+                    <button type="button"
+                            @click="isActive = !isActive"
+                            :class="isActive ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-700'"
+                            class="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                        <span :class="isActive ? 'translate-x-5' : 'translate-x-0'"
+                              class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"></span>
+                    </button>
+                </div>
+
+                {{-- Action Buttons --}}
+                <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                    <a href="{{ route('payment-channels.index') }}"
+                       class="px-5 py-2.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition">
+                        Cancel
+                    </a>
+                    <button type="submit"
+                            class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 active:scale-95 shadow-md shadow-indigo-500/20 transition cursor-pointer">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span>Save Changes</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        {{-- Right: Live Badge & Stats Card (1 col) --}}
+        <div class="space-y-6">
+            {{-- Recorded Ledger Stats Card --}}
+            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs p-6">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-1.5">
+                    <svg class="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    <span>Ledger Utilization</span>
+                </h3>
+
+                <div class="space-y-3">
+                    <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-700/60 flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Recorded Transactions</p>
+                            <h4 class="text-xl font-extrabold text-slate-900 dark:text-white mt-0.5">{{ number_format($paymentChannel->tx_count ?? 0) }}</h4>
+                        </div>
+                        <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
+                            #
+                        </div>
+                    </div>
+
+                    <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-700/60 flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Processed Financial Volume</p>
+                            <h4 class="text-lg font-mono font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                                {{ number_format($paymentChannel->tx_volume ?? 0, 2) }} RWF
+                            </h4>
+                        </div>
+                        <div class="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Live Preview Card --}}
+            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs p-6">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-1.5">
+                    <svg class="w-4 h-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    <span>Live Channel Preview</span>
+                </h3>
+
+                <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50/50 dark:bg-slate-800/40 space-y-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-xl flex items-center justify-center font-bold shadow-xs border"
+                             :class="{
+                                 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800/50': channelType === 'cash',
+                                 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800/50': channelType === 'bank',
+                                 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-950/40 dark:border-amber-800/50': channelType === 'mobile_money',
+                                 'bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-950/40 dark:border-rose-800/50': channelType === 'airtel',
+                                 'bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-950/40 dark:border-purple-800/50': channelType === 'gift',
+                                 'bg-indigo-50 text-indigo-600 border-indigo-200 dark:bg-indigo-950/40 dark:border-indigo-800/50': channelType === 'gateway'
+                             }">
+                            <template x-if="channelType === 'cash'">
+                                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                                </svg>
+                            </template>
+                            <template x-if="channelType === 'bank'">
+                                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
+                                </svg>
+                            </template>
+                            <template x-if="channelType === 'mobile_money'">
+                                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                </svg>
+                            </template>
+                            <template x-if="channelType === 'airtel'">
+                                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+                                </svg>
+                            </template>
+                            <template x-if="channelType === 'gift'">
+                                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v13m0-13V4a2 2 0 112 2h-2zm0 0V4a2 2 0 10-2 2h2zm-7 4h14a1 1 0 011 1v7a1 1 0 01-1 1H5a1 1 0 01-1-1v-7a1 1 0 011-1z" />
+                                </svg>
+                            </template>
+                            <template x-if="channelType === 'gateway'">
+                                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                                </svg>
+                            </template>
+                        </div>
+                        <div>
+                            <div class="font-bold text-slate-900 dark:text-white" x-text="name ? name : 'Channel Name'"></div>
+                            <span class="inline-flex items-center gap-1 font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                                #<span x-text="slug ? slug : 'system-slug'"></span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="text-xs text-slate-600 dark:text-slate-400 line-clamp-2" x-text="description ? description : 'No description specified.'"></div>
+
+                    <div class="flex items-center justify-between pt-2 border-t border-slate-200/60 dark:border-slate-700/60 text-xs">
+                        <span class="text-slate-500">Checkout Status</span>
+                        <span :class="isActive ? 'text-emerald-600 font-semibold flex items-center gap-1' : 'text-slate-400 font-medium'">
+                            <span x-show="isActive" class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            <span x-text="isActive ? 'Selectable' : 'Hidden'"></span>
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-</x-app-layout>
+</div>
+@endsection

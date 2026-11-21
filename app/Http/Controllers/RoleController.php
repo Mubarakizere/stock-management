@@ -18,7 +18,7 @@ class RoleController extends Controller
 
         // Eager-load users and permissions for drawer preview
         $rolesQuery = Role::with(['users', 'permissions'])
-            ->withCount('users');
+            ->withCount(['users', 'permissions']);
 
         if ($query !== '') {
             $rolesQuery->where(function ($qB) use ($query) {
@@ -33,12 +33,33 @@ class RoleController extends Controller
         }
 
         $roles = $rolesQuery
+            ->orderByRaw("CASE WHEN name = 'admin' THEN 1 WHEN name = 'manager' THEN 2 ELSE 3 END")
             ->orderBy('name')
-            ->paginate(10)
+            ->paginate(15)
             ->withQueryString();
+
+        $stats = [
+            'total_roles'       => Role::count(),
+            'system_roles'      => Role::whereIn('name', ['admin', 'manager'])->count(),
+            'custom_roles'      => Role::whereNotIn('name', ['admin', 'manager'])->count(),
+            'total_permissions' => Permission::count(),
+        ];
+
+        if ($request->ajax() && !$request->wantsJson()) {
+            return view('roles._table', compact('roles'))->render();
+        }
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'roles' => $roles,
+                'stats' => $stats,
+                'query' => $query,
+            ]);
+        }
 
         return view('roles.index', [
             'roles' => $roles,
+            'stats' => $stats,
             'query' => $query,
         ]);
     }

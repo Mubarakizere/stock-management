@@ -250,47 +250,62 @@ class ReportsController extends Controller
         $plGrossProfit = $plRevenue - $plCogs;
         $plNetProfit   = $plGrossProfit - $plOtherExpenses;
 
-        // -------- Return view --------
-        return view('reports.index', [
+        $viewData = [
             'start' => $start,
             'end' => $end,
             'q' => $q,
 
-            'totalSales'      => number_format($totalSales, 2),
-            'totalProfit'     => number_format($totalProfit, 2),
-            'pendingBalances' => number_format($pendingBalances, 2),
-            'totalPurchases'  => number_format($totalPurchases, 2),
-            'credits'         => number_format($credits, 2),
-            'debits'          => number_format($debits, 2),
-            'netBalance'      => number_format($netBalance, 2),
+            'totalSales'         => number_format($totalSales, 2),
+            'rawTotalSales'      => $totalSales,
+            'totalProfit'        => number_format($totalProfit, 2),
+            'rawTotalProfit'     => $totalProfit,
+            'pendingBalances'    => number_format($pendingBalances, 2),
+            'rawPendingBalances' => $pendingBalances,
+            'totalPurchases'     => number_format($totalPurchases, 2),
+            'rawTotalPurchases'  => $totalPurchases,
+            'credits'            => number_format($credits, 2),
+            'rawCredits'         => $credits,
+            'debits'             => number_format($debits, 2),
+            'rawDebits'          => $debits,
+            'netBalance'         => number_format($netBalance, 2),
+            'rawNetBalance'      => $netBalance,
 
-            'loansGiven'      => number_format($loansGiven, 2),
-            'loansTaken'      => number_format($loansTaken, 2),
+            'loansGiven'         => number_format($loansGiven, 2),
+            'rawLoansGiven'      => $loansGiven,
+            'loansTaken'         => number_format($loansTaken, 2),
+            'rawLoansTaken'      => $loansTaken,
 
-            'months'          => $months,
-            'monthlySales'    => $monthlySales,
+            'months'             => $months,
+            'monthlySales'       => $monthlySales,
 
-            'revenueGrowth'   => $revenueGrowth,
-            'profitMargin'    => $profitMargin,
-            'expenseRatio'    => $expenseRatio,
+            'revenueGrowth'      => $revenueGrowth,
+            'profitMargin'       => $profitMargin,
+            'expenseRatio'       => $expenseRatio,
 
             'revenueExpensesChart' => $revenueExpensesChart,
 
-            'arBalance'       => $arBalance,
-            'apBalance'       => $apBalance,
-            'inventoryUnits'  => $inventoryUnits,
-            'inventoryValue'  => $inventoryValue,
+            'arBalance'          => $arBalance,
+            'apBalance'          => $apBalance,
+            'inventoryUnits'     => $inventoryUnits,
+            'inventoryValue'     => $inventoryValue,
 
-            'topProducts'     => $topProducts,
-            'topCustomers'    => $topCustomers,
+            'topProducts'        => $topProducts,
+            'topCustomers'       => $topCustomers,
 
             // P&L block
-            'plRevenue'       => $plRevenue,
-            'plCogs'          => $plCogs,
-            'plGrossProfit'   => $plGrossProfit,
-            'plOtherExpenses' => $plOtherExpenses,
-            'plNetProfit'     => $plNetProfit,
-        ]);
+            'plRevenue'          => $plRevenue,
+            'plCogs'             => $plCogs,
+            'plGrossProfit'      => $plGrossProfit,
+            'plOtherExpenses'    => $plOtherExpenses,
+            'plNetProfit'        => $plNetProfit,
+        ];
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json($viewData);
+        }
+
+        // -------- Return view --------
+        return view('reports.index', $viewData);
     }
 
     /**

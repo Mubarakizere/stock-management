@@ -1,387 +1,377 @@
 @extends('layouts.app')
-@section('title', 'Production Runs')
+@section('title', 'Production Runs & Batch Lots')
 
 @section('content')
 @php
     $fmt0 = fn($n) => number_format((float)($n ?? 0), 0);
     $fmt2 = fn($n) => number_format((float)($n ?? 0), 2);
+
+    $isPaginated = $productions instanceof \Illuminate\Contracts\Pagination\LengthAwarePaginator;
 @endphp
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6"
+     x-data="{
+        selectedIds: [],
+        allSelected: false,
+        searchQuery: '{{ request('q', '') }}',
+        productId: '{{ request('product_id', '') }}',
+        expiryStatus: '{{ request('expiry_status', '') }}',
+        yieldStatus: '{{ request('yield_status', '') }}',
+        perPage: '{{ request('per_page', 20) }}',
+        isLoading: false,
 
-    {{-- Header --}}
-    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        // Single Reverse/Delete Modal
+        reverseModalOpen: false,
+        reverseActionUrl: '',
+        reverseRunId: '',
+        reverseProductName: '',
+        reverseQuantity: 0,
+        reverseUnit: '',
+
+        // Bulk Reverse/Delete Modal
+        bulkReverseModalOpen: false,
+
+        toggleSelectAll(checked) {
+            this.allSelected = checked;
+            if (checked) {
+                const checkboxes = document.querySelectorAll('#productions-table-container input[type=checkbox][value]');
+                this.selectedIds = Array.from(checkboxes).map(cb => cb.value);
+            } else {
+                this.selectedIds = [];
+            }
+        },
+
+        confirmReverse(url, runId, productName, quantity, unit) {
+            this.reverseActionUrl = url;
+            this.reverseRunId = runId;
+            this.reverseProductName = productName;
+            this.reverseQuantity = quantity;
+            this.reverseUnit = unit;
+            this.reverseModalOpen = true;
+        },
+
+        async fetchData() {
+            this.isLoading = true;
+            const params = new URLSearchParams();
+            if (this.searchQuery) params.set('q', this.searchQuery);
+            if (this.productId) params.set('product_id', this.productId);
+            if (this.expiryStatus) params.set('expiry_status', this.expiryStatus);
+            if (this.yieldStatus) params.set('yield_status', this.yieldStatus);
+            if (this.perPage) params.set('per_page', this.perPage);
+
+            try {
+                const resp = await fetch(`{{ route('productions.index') }}?${params.toString()}`, {
+                    headers: { 'Accept': 'application/json' }
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    const container = document.getElementById('productions-table-container');
+                    if (container && data.html) {
+                        container.innerHTML = data.html;
+                    }
+                    const paginator = document.getElementById('productions-pagination-container');
+                    if (paginator && data.pagination !== undefined) {
+                        paginator.innerHTML = data.pagination;
+                    }
+
+                    if (data.stats) {
+                        const elRuns = document.getElementById('stat-total-runs');
+                        if (elRuns) elRuns.textContent = data.stats.total_runs;
+                        const elProd = document.getElementById('stat-total-produced');
+                        if (elProd) elProd.textContent = data.stats.total_produced;
+                    }
+
+                    this.selectedIds = [];
+                    this.allSelected = false;
+                } else {
+                    window.location.href = `{{ route('productions.index') }}?${params.toString()}`;
+                }
+            } catch (e) {
+                window.location.href = `{{ route('productions.index') }}?${params.toString()}`;
+            } finally {
+                this.isLoading = false;
+            }
+        }
+     }">
+
+    {{-- Header Section --}}
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-slate-200/80 dark:border-slate-800">
         <div>
-            <div class="flex items-center gap-2 mb-1">
-                <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold tracking-wide uppercase bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200/60 dark:border-teal-800/60">
-                    Manufacturing
-                </span>
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-teal-500"></span>
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Manufacturing Operations</span>
             </div>
-            <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">
-                Production Runs
+            <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white mt-0.5 flex items-center gap-2.5">
+                <span>Production Runs &amp; Batch Lots</span>
+                <span class="px-2 py-0.5 text-xs font-bold rounded-full bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-400 border border-teal-200/60 dark:border-teal-800/60">
+                    Traceability &amp; Yield
+                </span>
             </h1>
-            <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                Monitor finished goods manufacturing, raw material deduction, and batch history.
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Monitor finished goods manufacturing batches, lot expiration dates, and Yield vs Scrap variance.
             </p>
         </div>
 
-        <div class="flex items-center gap-2.5">
+        <div class="flex flex-wrap items-center gap-2.5">
+            <a href="{{ route('recipes.index') }}"
+               class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200/90 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700/80 shadow-sm transition">
+                <svg class="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"/>
+                </svg>
+                <span>BOM Recipes</span>
+            </a>
+
             <a href="{{ route('reports.manufacturing') }}"
-               class="btn btn-outline text-xs sm:text-sm flex items-center gap-1.5 px-3.5 py-2 rounded-xl transition">
-                <i data-lucide="bar-chart-2" class="w-4 h-4 text-gray-500"></i>
-                <span>Analytics Report</span>
+               class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200/90 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700/80 shadow-sm transition">
+                <svg class="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                </svg>
+                <span>Manufacturing Analytics</span>
             </a>
 
             @can('products.edit')
                 <a href="{{ route('productions.create') }}"
-                   class="btn btn-primary flex items-center gap-1.5 text-xs sm:text-sm px-4 py-2 rounded-xl shadow-sm hover:shadow transition">
-                    <i data-lucide="plus" class="w-4 h-4"></i>
-                    <span>New Production Run</span>
+                   class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl text-white bg-teal-600 hover:bg-teal-700 active:bg-teal-800 shadow-sm transition">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    <span>+ New Production Batch</span>
                 </a>
             @endcan
         </div>
     </div>
 
-    {{-- KPI Stat Cards --}}
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {{-- Total Runs --}}
-        <div class="bg-white dark:bg-gray-800 border border-gray-200/80 dark:border-gray-700/80 rounded-2xl p-5 shadow-sm hover:border-gray-300 dark:hover:border-gray-600 transition">
+    {{-- 4 Executive Manufacturing KPI Cards --}}
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {{-- Total Runs & Output --}}
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 shadow-sm">
             <div class="flex items-center justify-between">
-                <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Runs</span>
-                <span class="w-9 h-9 rounded-xl bg-violet-50 dark:bg-violet-950/60 border border-violet-100 dark:border-violet-900/60 flex items-center justify-center text-violet-600 dark:text-violet-400">
-                    <i data-lucide="factory" class="w-4 h-4"></i>
+                <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Total Output</span>
+                <span class="w-8 h-8 rounded-xl bg-violet-50 dark:bg-violet-950/50 text-violet-600 dark:text-violet-400 flex items-center justify-center">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+                    </svg>
                 </span>
             </div>
-            <div class="mt-3">
-                <span class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 font-mono">
-                    {{ $fmt0($stats['total_runs'] ?? 0) }}
-                </span>
-                <span class="text-xs text-gray-400 ml-1">batches logged</span>
-            </div>
-        </div>
-
-        {{-- Total Units Output --}}
-        <div class="bg-white dark:bg-gray-800 border border-gray-200/80 dark:border-gray-700/80 rounded-2xl p-5 shadow-sm hover:border-gray-300 dark:hover:border-gray-600 transition">
-            <div class="flex items-center justify-between">
-                <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Total Produced</span>
-                <span class="w-9 h-9 rounded-xl bg-teal-50 dark:bg-teal-950/60 border border-teal-100 dark:border-teal-900/60 flex items-center justify-center text-teal-600 dark:text-teal-400">
-                    <i data-lucide="package-check" class="w-4 h-4"></i>
-                </span>
-            </div>
-            <div class="mt-3">
-                <span class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 font-mono">
-                    {{ $fmt0($stats['total_produced'] ?? 0) }}
-                </span>
-                <span class="text-xs text-gray-400 ml-1">finished units</span>
-            </div>
-        </div>
-
-        {{-- Active Recipes --}}
-        <div class="bg-white dark:bg-gray-800 border border-gray-200/80 dark:border-gray-700/80 rounded-2xl p-5 shadow-sm hover:border-gray-300 dark:hover:border-gray-600 transition">
-            <div class="flex items-center justify-between">
-                <span class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Products with Recipes</span>
-                <span class="w-9 h-9 rounded-xl bg-orange-50 dark:bg-orange-950/60 border border-orange-100 dark:border-orange-900/60 flex items-center justify-center text-orange-600 dark:text-orange-400">
-                    <i data-lucide="chef-hat" class="w-4 h-4"></i>
-                </span>
-            </div>
-            <div class="mt-3">
-                <span class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100 font-mono">
-                    {{ $fmt0($stats['active_recipes'] ?? 0) }}
-                </span>
-                <span class="text-xs text-gray-400 ml-1">producible items</span>
-            </div>
-        </div>
-    </div>
-
-    {{-- Filter Bar --}}
-    <div class="bg-white dark:bg-gray-800 border border-gray-200/80 dark:border-gray-700/80 rounded-2xl p-4 shadow-sm">
-        <form method="GET" action="{{ route('productions.index') }}" class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-            <div class="flex flex-1 flex-col sm:flex-row items-center gap-3">
-                {{-- Search --}}
-                <div class="relative w-full sm:w-72">
-                    <i data-lucide="search" class="w-4 h-4 absolute left-3 top-2.5 text-gray-400 dark:text-gray-500 pointer-events-none"></i>
-                    <input type="text" name="q" value="{{ request('q') }}"
-                           placeholder="Search product or batch notes…"
-                           class="form-input text-xs sm:text-sm pl-9 pr-3.5 py-2 w-full rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-gray-100">
+            <div class="mt-2">
+                <div class="text-2xl font-bold font-mono tracking-tight text-slate-900 dark:text-white" id="stat-total-produced">
+                    {{ $fmt2($stats['total_produced'] ?? 0) }}
                 </div>
-
-                {{-- Product Filter --}}
-                <div class="w-full sm:w-60">
-                    <select name="product_id"
-                            class="form-select text-xs sm:text-sm py-2 rounded-xl border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 w-full"
-                            onchange="this.form.submit()">
-                        <option value="">All Finished Products</option>
-                        @foreach($products as $p)
-                            <option value="{{ $p->id }}" {{ request('product_id') == $p->id ? 'selected' : '' }}>
-                                {{ $p->name }}
-                            </option>
-                        @endforeach
-                    </select>
+                <div class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                    {{ $fmt0($stats['total_runs'] ?? 0) }} completed batches
                 </div>
-
-                <button type="submit" class="btn btn-outline text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5">
-                    <i data-lucide="filter" class="w-3.5 h-3.5"></i>
-                    <span>Apply</span>
-                </button>
             </div>
+        </div>
 
-            @if(request()->hasAny(['q', 'product_id']))
-                <a href="{{ route('productions.index') }}"
-                   class="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition">
-                    <i data-lucide="x" class="w-3.5 h-3.5"></i>
-                    <span>Clear filters</span>
-                </a>
-            @endif
-        </form>
+        {{-- Average Yield Efficiency --}}
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 shadow-sm">
+            <div class="flex items-center justify-between">
+                <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Yield Efficiency</span>
+                <span class="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </span>
+            </div>
+            <div class="mt-2">
+                <div class="text-2xl font-bold font-mono tracking-tight text-emerald-600 dark:text-emerald-400">
+                    {{ $stats['avg_yield'] ?? 100 }}%
+                </div>
+                <div class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                    Average recipe yield rate
+                </div>
+            </div>
+        </div>
+
+        {{-- Total Scrap Loss --}}
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 shadow-sm">
+            <div class="flex items-center justify-between">
+                <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Scrap &amp; Shrinkage</span>
+                <span class="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </span>
+            </div>
+            <div class="mt-2">
+                <div class="text-2xl font-bold font-mono tracking-tight text-rose-600 dark:text-rose-400">
+                    {{ $fmt2($stats['total_scrap_qty'] ?? 0) }}
+                </div>
+                <div class="mt-0.5 text-xs font-mono text-slate-500 dark:text-slate-400">
+                    {{ $fmt2($stats['total_scrap_cost'] ?? 0) }} RWF loss
+                </div>
+            </div>
+        </div>
+
+        {{-- Batch Shelf-Life Watch --}}
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-4 shadow-sm">
+            <div class="flex items-center justify-between">
+                <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Shelf-Life Watch</span>
+                <span class="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </span>
+            </div>
+            <div class="mt-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-2xl font-bold font-mono tracking-tight text-amber-600 dark:text-amber-400">
+                        {{ $stats['expiring_soon_count'] ?? 0 }}
+                    </span>
+                    @if(($stats['expired_count'] ?? 0) > 0)
+                        <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-300">
+                            {{ $stats['expired_count'] }} Expired
+                        </span>
+                    @endif
+                </div>
+                <div class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                    Batches expiring &le; 30 days
+                </div>
+            </div>
+        </div>
     </div>
 
-    {{-- Flash Notifications --}}
-    @if(session('success'))
-        <div class="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 p-4 text-xs sm:text-sm text-emerald-700 dark:text-emerald-300 flex items-center gap-2.5 shadow-sm">
-            <i data-lucide="check-circle-2" class="w-4 h-4 shrink-0 text-emerald-600"></i>
-            <span>{{ session('success') }}</span>
-        </div>
-    @endif
-
-    @if(session('error'))
-        <div class="rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 p-4 text-xs sm:text-sm text-rose-700 dark:text-rose-300 flex items-center gap-2.5 shadow-sm">
-            <i data-lucide="alert-circle" class="w-4 h-4 shrink-0 text-rose-600"></i>
-            <span>{{ session('error') }}</span>
-        </div>
-    @endif
-
-    {{-- Main Table Container --}}
-    <div class="bg-white dark:bg-gray-800 border border-gray-200/80 dark:border-gray-700/80 rounded-2xl shadow-sm overflow-hidden">
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-700/80 text-sm">
-                <thead class="bg-gray-50/70 dark:bg-gray-900/40 text-gray-500 dark:text-gray-400 uppercase text-[11px] font-semibold tracking-wider">
-                    <tr>
-                        <th class="px-5 py-3.5 text-left">Run ID</th>
-                        <th class="px-5 py-3.5 text-left">Product Produced</th>
-                        <th class="px-5 py-3.5 text-right">Output Qty</th>
-                        <th class="px-5 py-3.5 text-center">Ingredients</th>
-                        <th class="px-5 py-3.5 text-left">Production Date</th>
-                        <th class="px-5 py-3.5 text-left">Operator</th>
-                        <th class="px-5 py-3.5 text-right">Actions</th>
-                    </tr>
-                </thead>
-
-                <tbody class="divide-y divide-gray-100 dark:divide-gray-700/60">
-                    @forelse($productions as $prod)
-                        @php
-                            $product = $prod->product;
-                            $unit = $product->unit ?? 'pcs';
-                        @endphp
-                        <tr class="hover:bg-gray-50/60 dark:hover:bg-gray-700/25 transition">
-                            {{-- Run ID --}}
-                            <td class="px-5 py-3.5 text-xs font-mono text-gray-500 dark:text-gray-400">
-                                <a href="{{ route('productions.show', $prod) }}" class="font-semibold text-gray-700 dark:text-gray-300 hover:text-teal-600 dark:hover:text-teal-400">
-                                    #{{ str_pad($prod->id, 5, '0', STR_PAD_LEFT) }}
-                                </a>
-                            </td>
-
-                            {{-- Product Name + Notes --}}
-                            <td class="px-5 py-3.5">
-                                <div class="font-medium text-gray-900 dark:text-gray-100 text-sm">
-                                    <a href="{{ route('productions.show', $prod) }}" class="hover:text-teal-600 dark:hover:text-teal-400 transition">
-                                        {{ $product->name ?? '—' }}
-                                    </a>
-                                </div>
-                                @if($prod->notes)
-                                    <div class="text-[11px] text-gray-400 truncate max-w-xs mt-0.5">
-                                        {{ $prod->notes }}
-                                    </div>
-                                @endif
-                            </td>
-
-                            {{-- Output Qty --}}
-                            <td class="px-5 py-3.5 text-right font-mono">
-                                <span class="font-bold text-gray-900 dark:text-gray-100 text-sm">
-                                    {{ $fmt2($prod->quantity) }}
-                                </span>
-                                <span class="text-xs text-gray-400 font-normal ml-0.5">{{ $unit }}</span>
-                            </td>
-
-                            {{-- Ingredients Count --}}
-                            <td class="px-5 py-3.5 text-center">
-                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700/60 text-gray-700 dark:text-gray-300 border border-gray-200/60 dark:border-gray-600/60">
-                                    <i data-lucide="flask-conical" class="w-3 h-3 text-orange-500"></i>
-                                    <span>{{ $prod->materials->count() }} items</span>
-                                </span>
-                            </td>
-
-                            {{-- Date --}}
-                            <td class="px-5 py-3.5 text-xs text-gray-600 dark:text-gray-300">
-                                <div>{{ $prod->produced_at->format('M d, Y') }}</div>
-                                <div class="text-[11px] text-gray-400 font-mono">{{ $prod->produced_at->format('H:i') }}</div>
-                            </td>
-
-                            {{-- Operator --}}
-                            <td class="px-5 py-3.5 text-xs text-gray-600 dark:text-gray-300">
-                                <div class="flex items-center gap-2">
-                                    <div class="w-6 h-6 rounded-full bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-600 dark:text-teal-400 text-[10px] font-bold flex items-center justify-center shrink-0">
-                                        {{ strtoupper(substr($prod->user->name ?? 'U', 0, 1)) }}
-                                    </div>
-                                    <span class="truncate max-w-[120px]">{{ $prod->user->name ?? 'System' }}</span>
-                                </div>
-                            </td>
-
-                            {{-- Actions --}}
-                            <td class="px-5 py-3.5 text-right">
-                                <div class="flex items-center justify-end gap-1.5">
-                                    <a href="{{ route('productions.show', $prod) }}"
-                                       class="px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-teal-600 dark:hover:text-teal-400 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition inline-flex items-center gap-1"
-                                       title="View Production Run Details">
-                                        <i data-lucide="eye" class="w-3.5 h-3.5"></i>
-                                        <span>Details</span>
-                                    </a>
-
-                                    @can('products.edit')
-                                        <button type="button"
-                                                @click="$store.reverseConfirm.open({{ $prod->id }}, '{{ addslashes($prod->product->name ?? '—') }}', '{{ $fmt2($prod->quantity) }} {{ $unit }}', {{ $prod->materials->count() }})"
-                                                class="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
-                                                title="Reverse & Rollback">
-                                            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
-                                        </button>
-                                    @endcan
-                                </div>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="7" class="px-6 py-16 text-center text-gray-500 dark:text-gray-400">
-                                <div class="w-12 h-12 rounded-2xl bg-gray-100 dark:bg-gray-700/50 flex items-center justify-center text-gray-400 mx-auto mb-3">
-                                    <i data-lucide="factory" class="w-6 h-6"></i>
-                                </div>
-                                <h3 class="font-semibold text-gray-800 dark:text-gray-200 text-sm">No production runs found</h3>
-                                <p class="text-xs text-gray-400 max-w-sm mx-auto mt-1">
-                                    Start manufacturing by selecting a finished product with an active recipe.
-                                </p>
-                                @can('products.edit')
-                                    <a href="{{ route('productions.create') }}"
-                                       class="mt-4 btn btn-primary btn-sm inline-flex items-center gap-1.5 text-xs px-3.5 py-2 rounded-xl">
-                                        <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-                                        <span>Record First Production</span>
-                                    </a>
-                                @endcan
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-
-        @if($productions->hasPages())
-            <div class="px-5 py-3.5 border-t border-gray-100 dark:border-gray-700/80 bg-gray-50/50 dark:bg-gray-900/30">
-                {{ $productions->links() }}
-            </div>
-        @endif
-    </div>
-</div>
-
-{{-- Reverse Production Confirmation Modal --}}
-@can('products.edit')
-<div
-    x-data
-    x-show="$store.reverseConfirm.show"
-    x-cloak
-    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
-    @keydown.escape.window="$store.reverseConfirm.close()"
->
-    <div
-        @click.outside="$store.reverseConfirm.close()"
-        x-show="$store.reverseConfirm.show"
-        x-transition:enter="transition ease-out duration-200"
-        x-transition:enter-start="opacity-0 scale-95"
-        x-transition:enter-end="opacity-100 scale-100"
-        x-transition:leave="transition ease-in duration-150"
-        x-transition:leave-start="opacity-100 scale-100"
-        x-transition:leave-end="opacity-0 scale-95"
-        class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700
-               rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4"
-    >
-        <div class="flex items-start gap-3.5">
-            <div class="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
-                <i data-lucide="rotate-ccw" class="w-5 h-5"></i>
-            </div>
-            <div>
-                <h3 class="text-base font-bold text-gray-900 dark:text-gray-100">Reverse Production Run</h3>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5" x-text="$store.reverseConfirm.productName"></p>
-            </div>
-        </div>
-
-        <div class="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/80 p-3.5 text-xs text-amber-800 dark:text-amber-300 space-y-1.5">
-            <p class="font-semibold">Reversing will execute the following:</p>
-            <ul class="space-y-1 pl-1">
-                <li class="flex items-center gap-1.5">
-                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                    <span>Deduct <strong x-text="$store.reverseConfirm.quantity"></strong> from finished goods stock</span>
-                </li>
-                <li class="flex items-center gap-1.5">
-                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                    <span>Restore <strong x-text="$store.reverseConfirm.materialsCount"></strong> consumed raw material(s) back into inventory</span>
-                </li>
-                <li class="flex items-center gap-1.5">
-                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                    <span>Permanently remove this production record</span>
-                </li>
-            </ul>
-        </div>
-
-        <p class="text-xs text-gray-500 dark:text-gray-400">
-            This action cannot be undone. Verify your physical inventory before proceeding.
-        </p>
-
-        <div class="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-100 dark:border-gray-700">
-            <button type="button" class="btn btn-outline text-xs px-4 py-2 rounded-xl" @click="$store.reverseConfirm.close()">
-                Cancel
+    {{-- Filter Toolbar --}}
+    <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        {{-- Segmented Yield / Expiry Pills --}}
+        <div class="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs">
+            <button type="button"
+                    @click="yieldStatus = ''; expiryStatus = ''; fetchData();"
+                    :class="!yieldStatus && !expiryStatus ? 'bg-white dark:bg-slate-900 text-teal-600 font-bold shadow-xs' : 'text-slate-600 dark:text-slate-400 font-medium'"
+                    class="px-3 py-1.5 rounded-lg transition cursor-pointer">
+                All Batches
             </button>
             <button type="button"
-                    class="btn btn-danger text-xs flex items-center gap-1.5 px-4 py-2 rounded-xl"
-                    @click="$store.reverseConfirm.submit()">
-                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
-                <span>Yes, Reverse Run</span>
+                    @click="yieldStatus = 'optimal'; expiryStatus = ''; fetchData();"
+                    :class="yieldStatus === 'optimal' ? 'bg-white dark:bg-slate-900 text-emerald-600 font-bold shadow-xs' : 'text-slate-600 dark:text-slate-400 font-medium'"
+                    class="px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                <span>Optimal Yield (&ge;95%)</span>
             </button>
+            <button type="button"
+                    @click="yieldStatus = 'high_waste'; expiryStatus = ''; fetchData();"
+                    :class="yieldStatus === 'high_waste' ? 'bg-white dark:bg-slate-900 text-rose-600 font-bold shadow-xs' : 'text-slate-600 dark:text-slate-400 font-medium'"
+                    class="px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                <span>High Scrap (&lt;85%)</span>
+            </button>
+            <button type="button"
+                    @click="expiryStatus = 'expiring_soon'; yieldStatus = ''; fetchData();"
+                    :class="expiryStatus === 'expiring_soon' ? 'bg-white dark:bg-slate-900 text-amber-600 font-bold shadow-xs' : 'text-slate-600 dark:text-slate-400 font-medium'"
+                    class="px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                <span>Expiring Soon (&le;30d)</span>
+            </button>
+        </div>
+
+        {{-- Product Filter & Search Input --}}
+        <div class="flex flex-wrap items-center gap-2">
+            <select x-model="productId"
+                    @change="fetchData()"
+                    class="text-xs rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 py-2 px-3 focus:ring-teal-500 focus:outline-none">
+                <option value="">All Products</option>
+                @foreach ($products as $p)
+                    <option value="{{ $p->id }}">{{ $p->name }}</option>
+                @endforeach
+            </select>
+
+            <div class="relative w-full sm:w-64">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                </div>
+                <input type="text"
+                       x-model="searchQuery"
+                       @input.debounce.350ms="fetchData()"
+                       placeholder="Search batch #, product..."
+                       class="w-full pl-9 pr-8 py-2 rounded-xl text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500">
+            </div>
+        </div>
+    </div>
+
+    {{-- Bulk Actions Bar --}}
+    <div x-show="selectedIds.length > 0"
+         x-cloak
+         class="p-3 bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 rounded-xl flex items-center justify-between text-xs">
+        <span class="font-semibold text-teal-800 dark:text-teal-300">
+            <strong x-text="selectedIds.length"></strong> production run(s) selected
+        </span>
+        <button type="button"
+                @click="bulkReverseModalOpen = true"
+                class="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-sm transition">
+            Reverse Selected Batches
+        </button>
+    </div>
+
+    {{-- Table Container --}}
+    <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden relative">
+        <div x-show="isLoading"
+             x-cloak
+             class="absolute inset-0 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-10">
+            <div class="flex items-center gap-2 px-4 py-2 rounded-xl bg-white dark:bg-slate-800 shadow-md text-xs font-semibold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
+                <svg class="animate-spin w-4 h-4 text-teal-600" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                </svg>
+                <span>Loading production batches...</span>
+            </div>
+        </div>
+
+        <div id="productions-table-container">
+            @include('productions._table', ['productions' => $productions])
+        </div>
+
+        <div id="productions-pagination-container" class="p-4 border-t border-slate-100 dark:border-slate-800">
+            @if ($isPaginated && $productions->hasPages())
+                {{ $productions->links() }}
+            @endif
+        </div>
+    </div>
+
+    {{-- Reverse Run Modal --}}
+    <div x-show="reverseModalOpen"
+         x-cloak
+         class="fixed inset-0 z-50 overflow-y-auto"
+         role="dialog" aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity" @click="reverseModalOpen = false"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+
+            <div class="inline-block align-bottom bg-white dark:bg-slate-900 rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full border border-slate-200 dark:border-slate-800 p-6 space-y-4">
+                <div class="flex items-center gap-3 text-rose-600">
+                    <div class="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/50 flex items-center justify-center shrink-0">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900 dark:text-white">Reverse Production Batch</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">This will restore consumed raw materials.</p>
+                    </div>
+                </div>
+
+                <p class="text-xs text-slate-600 dark:text-slate-300">
+                    Are you sure you want to reverse batch run for <strong x-text="reverseProductName"></strong>? This will deduct <strong x-text="reverseQuantity + ' ' + reverseUnit"></strong> from finished goods and restore the raw materials consumed.
+                </p>
+
+                <div class="flex items-center justify-end gap-3 pt-2">
+                    <button type="button"
+                            @click="reverseModalOpen = false"
+                            class="px-4 py-2 text-xs font-semibold rounded-xl text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 transition">
+                        Cancel
+                    </button>
+                    <form :action="reverseActionUrl" method="POST">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit"
+                                class="px-4 py-2 text-xs font-bold rounded-xl text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-500/20 transition">
+                            Confirm Reversal
+                        </button>
+                    </form>
+                </div>
+            </div>
         </div>
     </div>
 </div>
-
-{{-- Hidden form for reverse --}}
-<form id="reverse-production-form" method="POST" class="hidden">
-    @csrf @method('DELETE')
-</form>
-@endcan
-
-@push('scripts')
-<script>
-    document.addEventListener('alpine:init', () => {
-        Alpine.store('reverseConfirm', {
-            show: false,
-            productionId: null,
-            productName: '',
-            quantity: '',
-            materialsCount: 0,
-
-            open(id, name, qty, materials) {
-                this.productionId = id;
-                this.productName = name;
-                this.quantity = qty;
-                this.materialsCount = materials;
-                this.show = true;
-                this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
-            },
-
-            close() {
-                this.show = false;
-            },
-
-            submit() {
-                const form = document.getElementById('reverse-production-form');
-                form.action = '/productions/' + this.productionId;
-                form.submit();
-            },
-        });
-    });
-</script>
-@endpush
 @endsection

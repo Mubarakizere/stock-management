@@ -41,7 +41,7 @@
 
                 // Auto-expand based on current route
                 $salesActive = request()->routeIs('sales.*') || request()->routeIs('customers.*');
-                $inventoryActive = request()->routeIs('products.*') || request()->routeIs('raw-materials.*') || request()->routeIs('stock.history*') || request()->routeIs('productions.*');
+                $inventoryActive = request()->routeIs('products.*') || request()->routeIs('raw-materials.*') || request()->routeIs('stock.history*') || request()->routeIs('productions.*') || request()->routeIs('recipes.*');
                 $purchasesActive = request()->routeIs('purchases.*') || request()->routeIs('suppliers.*');
                 $financeActive = request()->routeIs('transactions.*')
                     || request()->routeIs('debits-credits.*')
@@ -148,6 +148,15 @@
                                       {{ request()->routeIs('productions.*') ? 'bg-teal-500/10 text-teal-400 font-semibold' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50' }}">
                                 <i data-lucide="factory" class="w-3.5 h-3.5"></i>
                                 <span>Production</span>
+                            </a>
+                        @endcan
+
+                        @can('products.view')
+                            <a href="{{ route('recipes.index') }}"
+                               class="flex items-center gap-2 px-2.5 py-1.5 text-sm rounded-lg transition-colors
+                                      {{ request()->routeIs('recipes.*') ? 'bg-teal-500/10 text-teal-400 font-semibold' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50' }}">
+                                <i data-lucide="chef-hat" class="w-3.5 h-3.5"></i>
+                                <span>Recipes (BOM)</span>
                             </a>
                         @endcan
 

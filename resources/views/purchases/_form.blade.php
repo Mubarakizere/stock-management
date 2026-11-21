@@ -20,6 +20,7 @@
                 'last_cost'            => (float) ($i->product?->last_purchase_price ?: 0),
                 'selling_price'        => (float) ($i->product?->price ?: 0),
                 'target_margin'        => (float) ($i->product?->target_margin ?: 0),
+                'unit'                 => $i->product?->unit ?: 'pcs',
                 'type'                 => $i->product?->type ?: 'raw_material',
                 'update_catalog_cost'  => true,
                 'update_selling_price' => false,
@@ -33,7 +34,7 @@
             ? ($purchase->purchase_date?->format('Y-m-d') ?? now()->format('Y-m-d'))
             : now()->format('Y-m-d')),
         'payment_channel' => old('payment_channel', $isEdit ? ($purchase->payment_channel ?? 'cash') : 'cash'),
-        'method'          => old('method',   $isEdit ? ($purchase->method ?? '')   : ''), // reference
+        'method'          => old('method',   $isEdit ? ($purchase->method ?? '')   : ''),
         'notes'           => old('notes',    $isEdit ? ($purchase->notes  ?? '')   : ''),
         'tax'             => (float) old('tax',      $isEdit ? $taxPct      : 0),
         'discount'        => (float) old('discount', $isEdit ? $discountPct : 0),
@@ -43,352 +44,481 @@
 @endphp
 
 <div x-data="purchaseForm(@js($initialState))" x-init="init()" class="space-y-6">
-    
-    {{-- Progress Indicator --}}
-    <div class="mb-8 relative">
-        <div class="overflow-hidden h-2 mb-4 text-xs flex rounded-full bg-gray-200 dark:bg-gray-700">
-            <div :style="`width: ${((step - 1) / 2) * 100}%`" class="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-indigo-500 transition-all duration-300"></div>
-        </div>
-        <div class="flex justify-between text-xs font-semibold text-gray-500 dark:text-gray-400">
-            <span :class="step >= 1 ? 'text-indigo-600 dark:text-indigo-400' : ''">1. Supplier Info</span>
-            <span :class="step >= 2 ? 'text-indigo-600 dark:text-indigo-400' : ''">2. Select Materials</span>
-            <span :class="step >= 3 ? 'text-indigo-600 dark:text-indigo-400' : ''">3. Review & Payment</span>
+
+    {{-- Step Navigation Indicator --}}
+    <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs">
+        <div class="grid grid-cols-3 gap-2">
+            {{-- Step 1 --}}
+            <button type="button"
+                    @click="if(step > 1) step = 1"
+                    :class="step === 1 ? 'border-teal-500 bg-teal-50/40 dark:bg-teal-950/20' : (step > 1 ? 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800' : 'border-slate-100 dark:border-slate-800 opacity-60')"
+                    class="flex items-center gap-3 p-3 rounded-xl border text-left transition">
+                <span :class="step >= 1 ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'"
+                      class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0">
+                    1
+                </span>
+                <div class="hidden sm:block">
+                    <div class="text-xs font-bold text-slate-800 dark:text-slate-200">Supplier & Terms</div>
+                    <div class="text-[10px] text-slate-400">Order metadata</div>
+                </div>
+            </button>
+
+            {{-- Step 2 --}}
+            <button type="button"
+                    @click="if(state.supplier_id) step = 2"
+                    :class="step === 2 ? 'border-teal-500 bg-teal-50/40 dark:bg-teal-950/20' : (step > 2 ? 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800' : 'border-slate-100 dark:border-slate-800 opacity-60')"
+                    class="flex items-center gap-3 p-3 rounded-xl border text-left transition">
+                <span :class="step >= 2 ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'"
+                      class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0">
+                    2
+                </span>
+                <div class="hidden sm:block">
+                    <div class="text-xs font-bold text-slate-800 dark:text-slate-200">Materials & Items</div>
+                    <div class="text-[10px] text-slate-400"><span x-text="state.lines.length"></span> items selected</div>
+                </div>
+            </button>
+
+            {{-- Step 3 --}}
+            <button type="button"
+                    @click="if(state.lines.length > 0) step = 3"
+                    :class="step === 3 ? 'border-teal-500 bg-teal-50/40 dark:bg-teal-950/20' : 'border-slate-100 dark:border-slate-800 opacity-60'"
+                    class="flex items-center gap-3 p-3 rounded-xl border text-left transition">
+                <span :class="step >= 3 ? 'bg-teal-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'"
+                      class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0">
+                    3
+                </span>
+                <div class="hidden sm:block">
+                    <div class="text-xs font-bold text-slate-800 dark:text-slate-200">Payment & Review</div>
+                    <div class="text-[10px] text-slate-400">Taxes, balances & notes</div>
+                </div>
+            </button>
         </div>
     </div>
 
     {{-- STEP 1: Basic Info --}}
-    <section x-show="step === 1" x-transition.opacity.duration.300ms class="space-y-6">
-        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm p-6 sm:p-8">
-            <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100 mb-6 border-b pb-3 dark:border-gray-700">Step 1: Choose Supplier</h2>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <section x-show="step === 1" x-transition.opacity.duration.200ms class="space-y-6">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs p-6 space-y-6">
+            <div class="flex items-center gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <span class="w-8 h-8 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold text-xs">
+                    1
+                </span>
                 <div>
-                    <x-label value="Supplier *" class="text-lg mb-2" />
-                    <select name="supplier_id" x-model="state.supplier_id" class="form-select text-lg py-3" required>
-                        <option value="">-- Click to Select Supplier --</option>
+                    <h2 class="text-base font-bold text-slate-900 dark:text-white">Supplier & Order Terms</h2>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Select the supplier and define transaction schedule and settlement method.</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {{-- Supplier Select --}}
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
+                        Supplier / Vendor <span class="text-rose-500">*</span>
+                    </label>
+                    <select name="supplier_id" x-model="state.supplier_id"
+                            class="w-full text-xs font-medium rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3.5 py-2.5 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition"
+                            required>
+                        <option value="">-- Choose Supplier --</option>
                         @foreach($suppliers as $s)
-                            <option value="{{ $s->id }}">{{ $s->name }}</option>
+                            <option value="{{ $s->id }}">{{ $s->name }} ({{ $s->phone ?: ($s->email ?: 'ID #'.$s->id) }})</option>
                         @endforeach
                     </select>
                     @error('supplier_id')
-                        <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
+                        <p class="text-xs text-rose-600 mt-1">{{ $message }}</p>
                     @enderror
                 </div>
 
+                {{-- Purchase Date --}}
                 <div>
-                    <x-label value="Purchase Date *" class="text-lg mb-2" />
-                    <input type="date" name="purchase_date" x-model="state.purchase_date" class="form-input text-lg py-3" required>
+                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
+                        Purchase Date <span class="text-rose-500">*</span>
+                    </label>
+                    <input type="date" name="purchase_date" x-model="state.purchase_date"
+                           class="w-full text-xs font-medium rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3.5 py-2.5 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition"
+                           required>
                     @error('purchase_date')
-                        <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
+                        <p class="text-xs text-rose-600 mt-1">{{ $message }}</p>
                     @enderror
                 </div>
 
-                <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t dark:border-gray-700 mt-2">
-                    <div>
-                        <x-label value="Payment Method" />
-                        <select name="payment_channel" x-model="state.payment_channel" class="form-select hidden">
-                            @foreach($paymentChannels as $channel)
-                                <option value="{{ $channel->slug }}">{{ $channel->name }}</option>
-                            @endforeach
-                        </select>
-                        <div class="flex gap-3 mt-2 flex-wrap">
-                            @foreach($paymentChannels as $channel)
+                {{-- Payment Channel --}}
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
+                        Payment Channel / Method
+                    </label>
+                    <input type="hidden" name="payment_channel" :value="state.payment_channel">
+                    <div class="flex gap-2 flex-wrap">
+                        @foreach($paymentChannels as $channel)
+                            @php
+                                $cSlug = $channel->slug;
+                            @endphp
                             <button type="button"
-                                    @click="setChannel('{{ $channel->slug }}')"
-                                    class="px-4 py-3 rounded-xl border text-sm font-semibold transition-colors flex-1 text-center"
-                                    :class="state.payment_channel === '{{ $channel->slug }}' 
-                                        ? 'bg-indigo-100 dark:bg-indigo-900/60 text-indigo-800 dark:text-indigo-300 border-indigo-400 dark:border-indigo-500 shadow-inner' 
-                                        : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'">
+                                    @click="setChannel('{{ $cSlug }}')"
+                                    :class="state.payment_channel === '{{ $cSlug }}'
+                                        ? 'bg-teal-50 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 border-teal-500 shadow-xs font-bold'
+                                        : 'border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 font-medium'"
+                                    class="px-3.5 py-2 rounded-xl border text-xs transition flex-1 text-center">
                                 {{ $channel->name }}
                             </button>
-                            @endforeach
-                        </div>
-                        @error('payment_channel')
-                            <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
-                        @enderror
+                        @endforeach
                     </div>
+                </div>
 
-                    <div>
-                        <x-label value="Reference / Invoice No. (Optional)" />
-                        <input type="text" name="method" x-model="state.method" class="form-input py-3 mt-2" placeholder="e.g. INV-12345">
-                        @error('method')
-                            <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
-                        @enderror
-                    </div>
+                {{-- Reference / Invoice No. --}}
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
+                        Supplier Invoice # / Delivery Note (Optional)
+                    </label>
+                    <input type="text" name="method" x-model="state.method"
+                           placeholder="e.g. INV-88421 or DN-009"
+                           class="w-full text-xs font-medium rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3.5 py-2.5 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
                 </div>
             </div>
         </div>
-        
+
         <div class="flex justify-end">
-            <button @click="nextStep()" type="button" class="btn btn-primary px-8 py-3 text-lg rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transition-all" :disabled="!state.supplier_id">
-                Next: Select Materials <i data-lucide="arrow-right" class="w-5 h-5"></i>
+            <button @click="nextStep()" type="button"
+                    class="inline-flex items-center gap-2 px-6 py-2.5 text-xs font-semibold rounded-xl bg-teal-600 text-white hover:bg-teal-500 shadow-sm transition"
+                    :disabled="!state.supplier_id">
+                <span>Continue: Select Materials</span>
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+                </svg>
             </button>
         </div>
     </section>
 
-    {{-- STEP 2: Raw Materials --}}
-    <section x-show="step === 2" x-transition.opacity.duration.300ms style="display: none;" class="space-y-6">
-        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm p-6 sm:p-8">
-            <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100 mb-6 border-b pb-3 dark:border-gray-700">Step 2: Add Raw Materials</h2>
-            
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                
-                {{-- Product Catalog --}}
-                <div class="lg:col-span-5 flex flex-col h-[500px]">
-                    <div class="mb-4 relative">
-                        <i data-lucide="search" class="w-5 h-5 absolute left-3 top-3 text-gray-400"></i>
-                        <input type="text" x-model="searchQuery" placeholder="Search materials..." class="form-input pl-10 py-3 rounded-xl border-gray-300 dark:border-gray-600 w-full shadow-sm">
+    {{-- STEP 2: Raw Materials Selection --}}
+    <section x-show="step === 2" x-transition.opacity.duration.200ms style="display: none;" class="space-y-6">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs p-6 space-y-6">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div class="flex items-center gap-2">
+                    <span class="w-8 h-8 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold text-xs">
+                        2
+                    </span>
+                    <div>
+                        <h2 class="text-base font-bold text-slate-900 dark:text-white">Select Inventory & Raw Materials</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Search materials from catalog and add line items with cost and quantity.</p>
                     </div>
-                    
-                    <div class="flex-1 overflow-y-auto pr-2 space-y-2 border border-gray-200 dark:border-gray-700 rounded-xl p-2 bg-gray-50/50 dark:bg-gray-900/50">
+                </div>
+
+                <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-teal-50 text-teal-800 dark:bg-teal-950/60 dark:text-teal-300 border border-teal-200 dark:border-teal-800"
+                      x-text="state.lines.length + ' Selected Items'"></span>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {{-- Product Catalog (Left Pane) --}}
+                <div class="lg:col-span-5 flex flex-col h-[520px]">
+                    <div class="mb-3 relative">
+                        <svg class="w-4 h-4 text-slate-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                        <input type="text" x-model="searchQuery" placeholder="Search catalog items..."
+                               class="w-full text-xs font-medium rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white pl-9 pr-3 py-2 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
+                    </div>
+
+                    <div class="flex-1 overflow-y-auto pr-1 space-y-2 rounded-xl border border-slate-200/80 dark:border-slate-800 p-2 bg-slate-50/50 dark:bg-slate-900/40">
                         @foreach($products as $p)
                             @php
                                 $cCost = (float)($p->cost_price ?: $p->price ?: 0);
                                 $lCost = (float)($p->last_purchase_price ?: 0);
                                 $sPrice = (float)($p->price ?: 0);
                                 $tMargin = (float)($p->target_margin ?: 0);
+                                $pUnit = $p->unit ?? 'pcs';
                             @endphp
-                            <div x-show="matchesSearch('{{ addslashes($p->name) }}')" class="flex justify-between items-center p-3 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-xl hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors shadow-sm">
+                            <div x-show="matchesSearch('{{ addslashes($p->name) }}')"
+                                 class="flex justify-between items-center p-3 border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-800 rounded-xl hover:border-teal-500/40 transition-colors shadow-2xs">
                                 <div>
-                                    <h4 class="font-bold text-gray-800 dark:text-gray-100">{{ $p->name }}</h4>
-                                    <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                    <h4 class="font-bold text-xs text-slate-900 dark:text-white">{{ $p->name }}</h4>
+                                    <div class="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                                         <span>Cost: RWF {{ number_format($cCost, 2) }}</span>
                                         @if($lCost > 0 && $lCost != $cCost)
-                                            <span class="text-indigo-600 dark:text-indigo-400 font-medium">• Last: RWF {{ number_format($lCost, 2) }}</span>
+                                            <span class="text-teal-600 dark:text-teal-400 font-medium">· Last: RWF {{ number_format($lCost, 2) }}</span>
                                         @endif
-                                        @if($p->unit)
-                                            <span class="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-[10px]">{{ $p->unit }}</span>
-                                        @endif
+                                        <span class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-[10px] font-mono">{{ $pUnit }}</span>
                                     </div>
                                 </div>
-                                <button type="button" class="btn btn-primary btn-sm px-4 py-2 rounded-lg flex items-center gap-1 shadow-sm"
-                                        @click="addToCart({{ $p->id }}, '{{ addslashes($p->name) }}', {{ $cCost }}, {{ $lCost }}, {{ $sPrice }}, {{ $tMargin }}, '{{ $p->type ?: 'raw_material' }}')">
-                                    <i data-lucide="plus" class="w-4 h-4"></i> Add
+                                <button type="button"
+                                        class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-teal-50 text-teal-700 hover:bg-teal-100 dark:bg-teal-950/40 dark:text-teal-300 dark:hover:bg-teal-900/50 border border-teal-200 dark:border-teal-800 transition shadow-2xs"
+                                        @click="addToCart({{ $p->id }}, '{{ addslashes($p->name) }}', {{ $cCost }}, {{ $lCost }}, {{ $sPrice }}, {{ $tMargin }}, '{{ $pUnit }}', '{{ $p->type ?: 'raw_material' }}')">
+                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                    </svg>
+                                    <span>Add</span>
                                 </button>
                             </div>
                         @endforeach
-                        <div x-show="searchQuery !== '' && !hasMatches()" class="text-center py-8 text-gray-500 dark:text-gray-400">
-                            No materials found matching your search.
-                        </div>
                     </div>
                 </div>
 
-                {{-- Cart / Selected Items --}}
-                <div class="lg:col-span-7 flex flex-col h-[500px]">
-                    <div class="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-xl p-4 flex-1 flex flex-col">
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="font-bold text-lg text-indigo-900 dark:text-indigo-300 flex items-center gap-2">
-                                <i data-lucide="shopping-bag" class="w-5 h-5"></i> Selected Items
+                {{-- Selected Items Cart (Right Pane) --}}
+                <div class="lg:col-span-7 flex flex-col h-[520px]">
+                    <div class="bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 flex-1 flex flex-col">
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                <svg class="w-4 h-4 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
+                                </svg>
+                                <span>Order Line Items</span>
                             </h3>
-                            <span class="bg-indigo-200 text-indigo-800 dark:bg-indigo-800 dark:text-indigo-200 text-xs px-2 py-1 rounded-full font-bold" x-text="state.lines.length + ' Items'"></span>
+                            <span class="text-xs text-slate-400 font-medium" x-text="state.lines.length + ' item(s)'"></span>
                         </div>
-                        
-                        <div class="flex-1 overflow-y-auto pr-2 space-y-3">
+
+                        <div class="flex-1 overflow-y-auto pr-1 space-y-3">
                             <template x-for="(row, idx) in state.lines" :key="row.key">
-                                <div class="bg-white dark:bg-gray-800 border border-indigo-100 dark:border-gray-700 rounded-xl p-4 shadow-sm relative group">
-                                    {{-- Hidden inputs to submit form data properly --}}
+                                <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-3.5 shadow-2xs relative">
                                     <input type="hidden" :name="`products[${idx}][product_id]`" :value="row.product_id">
                                     <input type="hidden" :name="`products[${idx}][total_cost]`" :value="lineTotal(row).toFixed(2)">
-                                    
-                                    <div class="flex justify-between items-start mb-3">
-                                        <h4 class="font-bold text-gray-800 dark:text-gray-100 text-lg" x-text="row.name"></h4>
-                                        <button type="button" class="text-rose-400 hover:text-rose-600 bg-rose-50 hover:bg-rose-100 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 p-1.5 rounded-lg transition-colors" @click="removeLine(idx)">
-                                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+
+                                    <div class="flex justify-between items-start mb-2">
+                                        <div>
+                                            <h4 class="font-bold text-xs text-slate-900 dark:text-white" x-text="row.name"></h4>
+                                            <span class="text-[10px] font-mono text-slate-400" x-text="'Unit: ' + (row.unit || 'pcs')"></span>
+                                        </div>
+                                        <button type="button"
+                                                class="text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 p-1 rounded-lg transition"
+                                                @click="removeLine(idx)">
+                                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                            </svg>
                                         </button>
                                     </div>
-                                    
-                                    <div class="flex gap-4 items-start">
-                                        <div class="w-28 sm:w-32">
-                                            <label class="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider mb-1 block">Quantity</label>
-                                            <input type="number" step="0.01" min="0.01" class="form-input font-bold text-lg py-2" x-model.number="row.quantity" :name="`products[${idx}][quantity]`" @input="recalc()">
-                                        </div>
-                                        <div class="flex-1">
-                                            <label class="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider mb-1 block">Purchase Cost (RWF)</label>
-                                            <input type="number" step="0.01" min="0" class="form-input font-bold text-lg py-2" x-model.number="row.unit_cost" :name="`products[${idx}][unit_cost]`" @input="recalc()">
 
-                                            {{-- Price Change Alert / Badge --}}
-                                            <div class="mt-2 flex flex-wrap items-center gap-1.5" x-show="priceDiffPct(row) !== 0">
-                                                <template x-if="priceDiffPct(row) > 0">
-                                                    <span class="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-lg border border-rose-200 dark:border-rose-800">
-                                                        ▲ +<span x-text="priceDiffPct(row)"></span>% price increase (Prev: RWF <span x-text="formatMoney(row.previous_cost)"></span>)
-                                                    </span>
-                                                </template>
-                                                <template x-if="priceDiffPct(row) < 0">
-                                                    <span class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                                                        ▼ -<span x-text="Math.abs(priceDiffPct(row))"></span>% price decrease (Prev: RWF <span x-text="formatMoney(row.previous_cost)"></span>)
-                                                    </span>
-                                                </template>
+                                    <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                                        {{-- Quantity --}}
+                                        <div class="sm:col-span-4">
+                                            <label class="text-[11px] font-semibold text-slate-500 mb-1 block">Quantity</label>
+                                            <input type="number" step="any" min="0.01"
+                                                   class="w-full text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition"
+                                                   x-model.number="row.quantity"
+                                                   :name="`products[${idx}][quantity]`"
+                                                   @input="recalc()">
+                                        </div>
+
+                                        {{-- Unit Cost --}}
+                                        <div class="sm:col-span-5">
+                                            <label class="text-[11px] font-semibold text-slate-500 mb-1 block">Unit Cost (RWF)</label>
+                                            <input type="number" step="any" min="0"
+                                                   class="w-full text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition"
+                                                   x-model.number="row.unit_cost"
+                                                   :name="`products[${idx}][unit_cost]`"
+                                                   @input="recalc()">
+                                        </div>
+
+                                        {{-- Line Subtotal --}}
+                                        <div class="sm:col-span-3 text-right">
+                                            <label class="text-[11px] font-semibold text-slate-500 mb-1 block">Line Total</label>
+                                            <div class="font-mono font-bold text-xs text-slate-900 dark:text-white">
+                                                <span x-text="formatMoney(lineTotal(row))"></span>
                                             </div>
-
-                                            {{-- Cost / Price Update Options --}}
-                                            <div class="mt-2 pt-2 border-t border-gray-100 dark:border-gray-700/60 space-y-1.5 text-xs">
-                                                <label class="inline-flex items-center gap-2 text-gray-700 dark:text-gray-300 cursor-pointer">
-                                                    <input type="checkbox" x-model="row.update_catalog_cost" :name="`products[${idx}][update_catalog_cost]`" value="1" class="rounded text-indigo-600 border-gray-300 dark:border-gray-600">
-                                                    <span>Update catalog cost to <strong>RWF <span x-text="formatMoney(row.unit_cost)"></span></strong></span>
-                                                </label>
-
-                                                <div x-show="row.type === 'product' || row.target_margin > 0 || row.selling_price > 0">
-                                                    <label class="inline-flex items-center gap-2 text-indigo-700 dark:text-indigo-300 cursor-pointer">
-                                                        <input type="checkbox" x-model="row.update_selling_price" :name="`products[${idx}][update_selling_price]`" value="1" class="rounded text-indigo-600 border-gray-300 dark:border-gray-600">
-                                                        <span>Adjust selling price to <strong>RWF <span x-text="formatMoney(calcSuggestedPrice(row))"></span></strong> (<span x-text="row.target_margin || 25"></span>% margin)</span>
-                                                    </label>
-                                                    <input type="hidden" :name="`products[${idx}][new_selling_price]`" :value="calcSuggestedPrice(row)">
-                                                </div>
-                                            </div>
+                                            <span class="text-[10px] text-slate-400">RWF</span>
                                         </div>
-                                        <div class="w-32 sm:w-36 text-right bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border border-gray-100 dark:border-gray-700 shrink-0">
-                                            <label class="text-xs text-gray-500 dark:text-gray-400 font-semibold uppercase tracking-wider block">Line Total</label>
-                                            <span class="font-black text-indigo-700 dark:text-indigo-400 text-lg" x-text="formatMoney(lineTotal(row))"></span>
-                                        </div>
+                                    </div>
+
+                                    {{-- Price Change Alert Pill --}}
+                                    <div class="mt-2 flex flex-wrap items-center gap-1.5" x-show="priceDiffPct(row) !== 0">
+                                        <template x-if="priceDiffPct(row) > 0">
+                                            <span class="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded-md border border-rose-200 dark:border-rose-800">
+                                                ▲ +<span x-text="priceDiffPct(row)"></span>% cost increase (Prior: RWF <span x-text="formatMoney(row.previous_cost)"></span>)
+                                            </span>
+                                        </template>
+                                        <template x-if="priceDiffPct(row) < 0">
+                                            <span class="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-200 dark:border-emerald-800">
+                                                ▼ -<span x-text="Math.abs(priceDiffPct(row))"></span>% cost decrease (Prior: RWF <span x-text="formatMoney(row.previous_cost)"></span>)
+                                            </span>
+                                        </template>
                                     </div>
                                 </div>
                             </template>
-                            
-                            <div x-show="state.lines.length === 0" class="h-full flex flex-col items-center justify-center text-indigo-300 dark:text-indigo-700/50 text-center p-6 border-2 border-dashed border-indigo-200 dark:border-indigo-800/50 rounded-2xl">
-                                <i data-lucide="shopping-cart" class="w-16 h-16 mb-4"></i>
-                                <p class="text-lg font-medium text-indigo-800 dark:text-indigo-300">Your cart is empty.</p>
-                                <p class="text-sm">Search and click "Add" on materials from the left.</p>
+
+                            <div x-show="state.lines.length === 0"
+                                 class="h-full flex flex-col items-center justify-center text-slate-400 text-center p-8 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
+                                <svg class="w-10 h-10 mb-2 text-slate-300 dark:text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
+                                </svg>
+                                <p class="text-xs font-semibold text-slate-700 dark:text-slate-300">Order is currently empty</p>
+                                <p class="text-[11px] text-slate-400 mt-0.5">Click "Add" on any material from the left panel.</p>
                             </div>
                         </div>
-                        
-                        <div class="mt-4 pt-4 border-t border-indigo-200 dark:border-indigo-800 flex justify-between items-center bg-white dark:bg-gray-800 p-4 rounded-xl shadow-sm">
-                            <span class="text-gray-500 dark:text-gray-400 font-bold uppercase tracking-wider">Subtotal</span>
-                            <span class="text-2xl font-black text-gray-900 dark:text-white">RWF <span x-text="formatMoney(subtotal)"></span></span>
+
+                        {{-- Subtotal Card Bar --}}
+                        <div class="mt-3 pt-3 border-t border-slate-200/80 dark:border-slate-800 flex justify-between items-center">
+                            <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Items Subtotal</span>
+                            <div class="text-base font-bold text-slate-900 dark:text-white tabular-nums">
+                                <span class="text-xs text-slate-400 font-normal">RWF</span>
+                                <span x-text="formatMoney(subtotal)"></span>
+                            </div>
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
 
-            </div>
-        </div>
-        
         <div class="flex justify-between">
-            <button @click="prevStep()" type="button" class="btn btn-secondary px-6 py-3 rounded-xl flex items-center gap-2 hover:bg-gray-200 dark:hover:bg-gray-600">
-                <i data-lucide="arrow-left" class="w-5 h-5"></i> Back
+            <button @click="prevStep()" type="button"
+                    class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-700 transition">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+                <span>Back: Supplier Info</span>
             </button>
-            <button @click="nextStep()" type="button" class="btn btn-primary px-8 py-3 text-lg rounded-xl flex items-center gap-2 shadow-lg hover:shadow-xl transition-all" :disabled="state.lines.length === 0">
-                Next: Review & Payment <i data-lucide="arrow-right" class="w-5 h-5"></i>
+
+            <button @click="nextStep()" type="button"
+                    class="inline-flex items-center gap-2 px-6 py-2 text-xs font-semibold rounded-xl bg-teal-600 text-white hover:bg-teal-500 shadow-sm transition"
+                    :disabled="state.lines.length === 0">
+                <span>Continue: Payment & Settlement</span>
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+                </svg>
             </button>
         </div>
-        
-        @if ($errors->has('products'))
-            <div class="mt-4 p-4 rounded-xl text-sm text-red-700 bg-red-100 border border-red-200">
-                Some products are missing quantities or valid costs. Please verify your selected items.
-            </div>
-        @endif
     </section>
 
-    {{-- STEP 3: Notes & Totals --}}
-    <section x-show="step === 3" x-transition.opacity.duration.300ms style="display: none;" class="space-y-6">
-        <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-sm p-6 sm:p-8">
-            <h2 class="text-xl font-bold text-gray-800 dark:text-gray-100 mb-6 border-b pb-3 dark:border-gray-700">Step 3: Review & Complete</h2>
-            
+    {{-- STEP 3: Review & Payment --}}
+    <section x-show="step === 3" x-transition.opacity.duration.200ms style="display: none;" class="space-y-6">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs p-6 space-y-6">
+            <div class="flex items-center gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <span class="w-8 h-8 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold text-xs">
+                    3
+                </span>
+                <div>
+                    <h2 class="text-base font-bold text-slate-900 dark:text-white">Review & Financial Settlement</h2>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Configure taxes, discounts, down-payment, supporting documents, and audit notes.</p>
+                </div>
+            </div>
+
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                
-                {{-- Payment summary --}}
-                <div class="bg-gray-50 dark:bg-gray-900/50 rounded-2xl p-6 border border-gray-200 dark:border-gray-700">
-                    <h3 class="font-bold text-lg mb-4 text-gray-800 dark:text-gray-200">Payment Summary</h3>
-                    
-                    <div class="space-y-4">
-                        <div class="flex justify-between items-center pb-3 border-b border-gray-200 dark:border-gray-700">
-                            <span class="text-gray-600 dark:text-gray-400 font-medium">Subtotal</span>
-                            <span class="font-bold text-lg" x-text="formatMoney(subtotal)"></span>
+                {{-- Payment Details (Left) --}}
+                <div class="rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-4">
+                    <h3 class="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                        Order Financial Breakdown
+                    </h3>
+
+                    <div class="flex justify-between items-center pb-3 border-b border-slate-200 dark:border-slate-700 text-xs">
+                        <span class="text-slate-600 dark:text-slate-400 font-medium">Subtotal</span>
+                        <div class="font-mono font-bold text-slate-900 dark:text-white">
+                            RWF <span x-text="formatMoney(subtotal)"></span>
+                        </div>
+                    </div>
+
+                    {{-- Tax % --}}
+                    <div class="flex items-center justify-between gap-4 text-xs">
+                        <div class="w-1/2">
+                            <label class="block text-[11px] font-semibold text-slate-500 mb-1">Tax Rate (%)</label>
+                            <input type="number" step="0.01" min="0" max="100" name="tax"
+                                   x-model.number="state.tax" @input="recalc()"
+                                   class="w-full text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
+                        </div>
+                        <div class="text-right pt-4 font-mono font-bold text-slate-700 dark:text-slate-300">
+                            + RWF <span x-text="formatMoney(taxValue)"></span>
+                        </div>
+                    </div>
+
+                    {{-- Discount % --}}
+                    <div class="flex items-center justify-between gap-4 text-xs">
+                        <div class="w-1/2">
+                            <label class="block text-[11px] font-semibold text-slate-500 mb-1">Discount (%)</label>
+                            <input type="number" step="0.01" min="0" max="100" name="discount"
+                                   x-model.number="state.discount" @input="recalc()"
+                                   class="w-full text-xs font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
+                        </div>
+                        <div class="text-right pt-4 font-mono font-bold text-amber-600 dark:text-amber-400">
+                            - RWF <span x-text="formatMoney(discountValue)"></span>
+                        </div>
+                    </div>
+
+                    {{-- Total Banner --}}
+                    <div class="pt-3 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-white">Grand Total Amount</span>
+                        <div class="text-xl font-bold text-slate-900 dark:text-white tabular-nums">
+                            <span class="text-xs text-slate-400 font-normal">RWF</span>
+                            <span x-text="formatMoney(grand)"></span>
+                        </div>
+                    </div>
+
+                    {{-- Downpayment & Balance --}}
+                    <div class="rounded-xl p-4 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-2xs space-y-3">
+                        <div class="flex items-center justify-between">
+                            <label class="text-xs font-bold text-slate-800 dark:text-slate-200">Amount Paid Now (Deposit / Cash Out)</label>
+                            <button type="button" @click="payFull()"
+                                    class="text-[11px] font-bold text-teal-600 dark:text-teal-400 hover:underline">
+                                Pay In Full
+                            </button>
                         </div>
 
-                        <div class="flex items-center justify-between gap-4">
-                            <div class="flex-1">
-                                <x-label value="Tax (%)" class="text-xs uppercase tracking-wider text-gray-500" />
-                                <input type="number" step="0.01" min="0" max="100" name="tax" class="form-input mt-1" x-model.number="state.tax" @input="recalc()">
-                            </div>
-                            <div class="text-right pt-5">
-                                <span class="font-medium text-gray-700 dark:text-gray-300" x-text="'+ ' + formatMoney(taxValue)"></span>
-                            </div>
+                        <div class="relative">
+                            <input type="number" step="any" min="0" id="amount_paid" name="amount_paid"
+                                   x-model.number="state.amount_paid" @input="recalc()"
+                                   class="w-full text-sm font-mono font-bold rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 px-3.5 py-2.5 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition">
+                            <span class="absolute right-3.5 top-2.5 text-xs text-slate-400 font-mono pointer-events-none">RWF</span>
                         </div>
 
-                        <div class="flex items-center justify-between gap-4">
-                            <div class="flex-1">
-                                <x-label value="Discount (%)" class="text-xs uppercase tracking-wider text-gray-500" />
-                                <input type="number" step="0.01" min="0" max="100" name="discount" class="form-input mt-1" x-model.number="state.discount" @input="recalc()">
-                            </div>
-                            <div class="text-right pt-5">
-                                <span class="font-medium text-amber-600 dark:text-amber-400" x-text="'- ' + formatMoney(discountValue)"></span>
-                            </div>
-                        </div>
-
-                        <div class="flex justify-between items-center pt-4 border-t-2 border-gray-200 dark:border-gray-700 mt-2">
-                            <span class="text-xl font-black uppercase text-gray-800 dark:text-white">Total</span>
-                            <span class="text-2xl font-black text-indigo-700 dark:text-indigo-400" x-text="'RWF ' + formatMoney(grand)"></span>
-                        </div>
-
-                        <div class="bg-white dark:bg-gray-800 rounded-xl p-4 mt-6 border border-gray-200 dark:border-gray-700 shadow-sm">
-                            <x-label value="Amount Paid Now" class="font-bold text-gray-800 dark:text-gray-200 mb-2" />
-                            <div class="flex items-center gap-3">
-                                <input type="number" step="0.01" min="0" id="amount_paid" name="amount_paid" class="form-input text-xl font-bold py-3 text-emerald-700 dark:text-emerald-400" x-model.number="state.amount_paid" @input="recalc()">
-                                <button type="button" class="btn btn-success whitespace-nowrap px-4 py-3" @click="payFull()">
-                                    Pay Full
-                                </button>
-                            </div>
-                            
-                            <div class="flex justify-between items-center mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
-                                <span class="font-bold text-gray-600 dark:text-gray-400">Balance to Supplier</span>
-                                <span class="text-xl font-bold" :class="balance > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-gray-500 dark:text-gray-400'" x-text="'RWF ' + formatMoney(balance)"></span>
-                            </div>
+                        <div class="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-xs">
+                            <span class="font-medium text-slate-600 dark:text-slate-400">Remaining Balance to Supplier:</span>
+                            <span class="font-mono font-bold"
+                                  :class="balance > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'"
+                                  x-text="'RWF ' + formatMoney(balance)"></span>
                         </div>
                     </div>
                 </div>
 
-                {{-- Extras (Document & Notes) --}}
-                <div class="space-y-6">
-                    <div class="bg-gray-50 dark:bg-gray-900/50 rounded-2xl p-6 border border-gray-200 dark:border-gray-700">
-                        <div class="flex items-center gap-2 mb-4">
-                            <i data-lucide="paperclip" class="w-5 h-5 text-indigo-500"></i>
-                            <h3 class="font-bold text-lg text-gray-800 dark:text-gray-200">Supporting Document</h3>
-                        </div>
-                        <input type="file" name="document" class="form-input p-2 bg-white dark:bg-gray-800" accept=".jpg,.jpeg,.png,.pdf,.doc,.docx">
-                        <p class="text-xs text-gray-500 mt-2">Upload invoice or receipt (Images, PDF, Word - Max 5MB)</p>
-                        @error('document')
-                            <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
-                        @enderror
+                {{-- Extras (Document & Notes) (Right) --}}
+                <div class="space-y-4">
+                    {{-- Document Attachment --}}
+                    <div class="rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40">
+                        <label class="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5 uppercase tracking-wider">
+                            Supporting Document / Receipt
+                        </label>
+                        <input type="file" name="document"
+                               class="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100 dark:file:bg-slate-800 dark:file:text-slate-300"
+                               accept=".jpg,.jpeg,.png,.pdf,.doc,.docx">
+                        <p class="text-[11px] text-slate-400 mt-1.5">Attach supplier invoice, delivery docket, or payment receipt (Max 5MB).</p>
+
                         @if($isEdit && !empty($purchase->document_path))
-                            <div class="mt-3 p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg text-sm text-gray-700 dark:text-gray-300 flex items-center justify-between">
-                                <span class="flex items-center gap-2"><i data-lucide="file-check" class="w-4 h-4 text-indigo-600"></i> Document Attached</span>
-                                <a href="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($purchase->document_path) }}" target="_blank" class="text-indigo-600 font-bold hover:underline">View</a>
+                            <div class="mt-3 p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-xs flex items-center justify-between">
+                                <span class="font-medium text-slate-700 dark:text-slate-300">Current Attachment on file</span>
+                                <a href="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($purchase->document_path) }}" target="_blank"
+                                   class="text-teal-600 dark:text-teal-400 font-bold hover:underline">
+                                    View File →
+                                </a>
                             </div>
                         @endif
                     </div>
 
-                    <div class="bg-gray-50 dark:bg-gray-900/50 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 flex-1">
-                        <div class="flex items-center gap-2 mb-4">
-                            <i data-lucide="sticky-note" class="w-5 h-5 text-indigo-500"></i>
-                            <h3 class="font-bold text-lg text-gray-800 dark:text-gray-200">Notes (Optional)</h3>
-                        </div>
-                        <textarea name="notes" x-model="state.notes" rows="4" class="form-textarea w-full rounded-xl" placeholder="Any remarks about this purchase..."></textarea>
-                        @error('notes')
-                            <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
-                        @enderror
+                    {{-- Notes --}}
+                    <div class="rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40">
+                        <label class="block text-xs font-bold text-slate-800 dark:text-slate-200 mb-1.5 uppercase tracking-wider">
+                            Purchase Notes & Remarks
+                        </label>
+                        <textarea name="notes" x-model="state.notes" rows="4"
+                                  placeholder="Terms of delivery, payment schedule notes, quality checks..."
+                                  class="w-full text-xs font-medium rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-3.5 py-2.5 focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition"></textarea>
                     </div>
                 </div>
             </div>
         </div>
 
         <div class="flex justify-between">
-            <button @click="prevStep()" type="button" class="btn btn-secondary px-6 py-3 rounded-xl flex items-center gap-2 hover:bg-gray-200 dark:hover:bg-gray-600">
-                <i data-lucide="arrow-left" class="w-5 h-5"></i> Back
+            <button @click="prevStep()" type="button"
+                    class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-700 transition">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+                <span>Back: Edit Materials</span>
             </button>
-            <button type="submit" class="btn btn-success px-8 py-3 text-xl font-bold rounded-xl flex items-center gap-2 shadow-xl hover:shadow-2xl transition-all hover:scale-105">
-                <i data-lucide="check-circle" class="w-6 h-6"></i>
-                {{ $isEdit ? 'Update Purchase' : 'Confirm & Save Purchase' }}
+
+            <button type="submit"
+                    class="inline-flex items-center gap-2 px-6 py-2.5 text-xs font-semibold rounded-xl bg-teal-600 text-white hover:bg-teal-500 shadow-sm transition">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                <span>{{ $isEdit ? 'Update Purchase Order' : 'Confirm & Save Purchase' }}</span>
             </button>
         </div>
     </section>
 </div>
 
 @push('scripts')
-<script src="https://unpkg.com/lucide@latest"></script>
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-    if (window.lucide) lucide.createIcons();
-});
-
 function purchaseForm(initial){
     const withKeys = (arr) =>
         arr.map(r => ({
@@ -399,7 +529,7 @@ function purchaseForm(initial){
     return {
         step: 1,
         searchQuery: '',
-        
+
         state: {
             supplier_id:     initial.supplier_id     ?? '',
             purchase_date:   initial.purchase_date   ?? '',
@@ -411,7 +541,7 @@ function purchaseForm(initial){
             amount_paid:     Number(initial.amount_paid || 0),
             lines:           withKeys(Array.isArray(initial.lines) && initial.lines.length
                                 ? initial.lines
-                                : []), // Empty cart by default now
+                                : []),
         },
 
         subtotal: 0,
@@ -422,15 +552,14 @@ function purchaseForm(initial){
 
         init() {
             this.recalc();
-            // If editing and has items, maybe jump to review or just start at 1
         },
-        
+
         nextStep() {
             if (this.step === 1 && !this.state.supplier_id) return;
             if (this.step === 2 && this.state.lines.length === 0) return;
             if (this.step < 3) this.step++;
         },
-        
+
         prevStep() {
             if (this.step > 1) this.step--;
         },
@@ -443,14 +572,8 @@ function purchaseForm(initial){
             if (this.searchQuery === '') return true;
             return name.toLowerCase().includes(this.searchQuery.toLowerCase());
         },
-        
-        hasMatches() {
-            // A simple DOM check is easiest for Alpine lists
-            return document.querySelectorAll(`[x-show="matchesSearch('...' )]`).length > 0;
-        },
 
-        addToCart(id, name, cost, lastCost = 0, selling = 0, margin = 0, type = 'raw_material') {
-            // check if already exists
+        addToCart(id, name, cost, lastCost = 0, selling = 0, margin = 0, unit = 'pcs', type = 'raw_material') {
             const existing = this.state.lines.find(l => l.product_id === id);
             if(existing) {
                 existing.quantity++;
@@ -465,18 +588,13 @@ function purchaseForm(initial){
                     last_cost: lastCost,
                     selling_price: selling,
                     target_margin: margin,
+                    unit: unit,
                     type: type,
                     update_catalog_cost: true,
                     update_selling_price: false,
                 });
             }
             this.recalc();
-        },
-
-        calcSuggestedPrice(row) {
-            const cost = Number(row.unit_cost || 0);
-            const margin = Number(row.target_margin || 25);
-            return Number((cost * (1 + (margin / 100))).toFixed(2));
         },
 
         priceDiffPct(row) {
@@ -509,9 +627,9 @@ function purchaseForm(initial){
         },
 
         formatMoney(v) {
-            return Number(v || 0).toFixed(2);
+            return Number(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         },
-    }
+    };
 }
 </script>
 @endpush

@@ -204,16 +204,31 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:products.edit');
 
     // Raw Materials
+    Route::post('raw-materials/bulk-delete', [RawMaterialController::class, 'bulkDestroy'])
+        ->name('raw-materials.bulk-delete')
+        ->middleware('permission:products.delete');
     Route::resource('raw-materials', RawMaterialController::class)
         ->parameters(['raw-materials' => 'raw_material'])
         ->middleware('permission:products.view');
 
-    // Recipes (Bill of Materials)
+    // Recipes (Bill of Materials & Dynamic BOM Costing)
+    Route::get('recipes', [App\Http\Controllers\RecipeController::class, 'index'])
+        ->name('recipes.index')
+        ->middleware('permission:products.view');
+    Route::post('recipes/recalculate-all', [App\Http\Controllers\RecipeController::class, 'recalculateAllBom'])
+        ->name('recipes.recalculate-all')
+        ->middleware('permission:products.edit');
     Route::get('products/{product}/recipe', [App\Http\Controllers\RecipeController::class, 'edit'])
         ->name('recipes.edit')
         ->middleware('permission:products.view');
     Route::put('products/{product}/recipe', [App\Http\Controllers\RecipeController::class, 'update'])
         ->name('recipes.update')
+        ->middleware('permission:products.edit');
+    Route::post('products/{product}/recipe/sync-bom', [App\Http\Controllers\RecipeController::class, 'syncBomCost'])
+        ->name('recipes.sync-bom')
+        ->middleware('permission:products.edit');
+    Route::delete('products/{product}/recipe', [App\Http\Controllers\RecipeController::class, 'destroy'])
+        ->name('recipes.destroy')
         ->middleware('permission:products.edit');
 
     // Productions
@@ -225,6 +240,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->middleware('permission:products.edit');
         Route::post('productions', [App\Http\Controllers\ProductionController::class, 'store'])
             ->name('productions.store')
+            ->middleware('permission:products.edit');
+        Route::post('productions/bulk-delete', [App\Http\Controllers\ProductionController::class, 'bulkDestroy'])
+            ->name('productions.bulk-delete')
             ->middleware('permission:products.edit');
         Route::get('productions/{production}', [App\Http\Controllers\ProductionController::class, 'show'])
             ->name('productions.show');

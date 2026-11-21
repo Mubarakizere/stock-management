@@ -5,7 +5,6 @@
 @php
     use Carbon\Carbon;
 
-    // Ensure relations exist (safe if already eager-loaded)
     try {
         $purchase->loadMissing([
             'items.product.category',
@@ -13,602 +12,460 @@
             'returns.items.product',
             'supplier',
             'user',
-            'loan.payments.user',  // <-- include loan payments
+            'loan.payments.user',
             'transaction',
         ]);
     } catch (\Throwable $e) {}
 
-    // ---- Safe meta ----
     $date      = $purchase->purchase_date ?? $purchase->created_at;
     $status    = strtolower($purchase->status ?? 'completed');
     $channel   = strtolower($purchase->payment_channel ?? 'cash');
     $reference = trim((string) ($purchase->method ?? ''));
 
-    // ---- Colors ----
-    $statusColors = [
-        'completed' => 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
-        'partial'   => 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
-        'pending'   => 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-        'cancelled' => 'bg-gray-100 text-gray-800 dark:bg-gray-900/40 dark:text-gray-300',
-    ];
-    $channelColors = [
-        'cash' => 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
-        'bank' => 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
-        'momo' => 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300',
-    ];
-    $statusClass  = $statusColors[$status] ?? $statusColors['completed'];
-    $channelClass = $channelColors[$channel] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-900/40 dark:text-gray-300';
+    $fmt2 = fn($n) => number_format((float)($n ?? 0), 2);
+    $fmt0 = fn($n) => number_format((float)($n ?? 0), 0);
 
-    // ---- Money helpers ----
-    $fmt = fn($n) => number_format((float)($n ?? 0), 2);
-
-    // ---- Subtotal fallback ----
-    $computedSubtotal = $purchase->subtotal
-        ?? optional($purchase->items)->sum(fn($i) => (float)$i->quantity * (float)$i->unit_cost);
-
-    // ---- Totals ----
-    $tax      = (float)($purchase->tax ?? 0);
-    $discount = (float)($purchase->discount ?? 0);
-    $total    = (float)($purchase->total_amount ?? ($computedSubtotal + $tax - $discount));
-    $paid     = (float)($purchase->amount_paid ?? 0);
+    $computedSubtotal = (float) ($purchase->subtotal ?? optional($purchase->items)->sum(fn($i) => (float)$i->quantity * (float)$i->unit_cost));
+    $tax      = (float) ($purchase->tax ?? 0);
+    $discount = (float) ($purchase->discount ?? 0);
+    $total    = (float) ($purchase->total_amount ?? ($computedSubtotal + $tax - $discount));
+    $paid     = (float) ($purchase->amount_paid ?? 0);
     $balance  = max(0, $total - $paid);
     $paidPct  = $total > 0 ? min(100, round(($paid / $total) * 100)) : 0;
 
-    // ---- Returns overview ----
     $returns         = $purchase->returns->sortByDesc('return_date')->values();
     $sumReturnValue  = (float) $returns->sum('total_amount');
     $sumCashRefunds  = (float) $returns->sum('refund_amount');
-    $netExposure     = max(0, $total - $paid - $sumCashRefunds);
 
-    // ---- Loan snapshot (for display)
     $loan        = $purchase->loan;
     $loanPaid    = $loan ? (float) $loan->payments->sum('amount') : 0.0;
     $loanAmt     = $loan ? (float) $loan->amount : 0.0;
     $loanRemain  = $loan ? max(0, round($loanAmt - $loanPaid, 2)) : 0.0;
-    $loanPct     = $loanAmt > 0 ? min(100, (int) round(($loanPaid / $loanAmt) * 100)) : 0;
+
+    $statusBadge = match($status) {
+        'completed' => 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-200/60 dark:border-emerald-800/60',
+        'partial'   => 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 border-amber-200/60 dark:border-amber-800/60',
+        'pending'   => 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-400 border-rose-200/60 dark:border-rose-800/60',
+        'cancelled' => 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700',
+        default     => 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700',
+    };
+
+    $channelBadge = match($channel) {
+        'cash' => 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200/60 dark:border-emerald-800/60',
+        'bank' => 'bg-blue-50 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200/60 dark:border-blue-800/60',
+        'momo', 'mobile_money' => 'bg-purple-50 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border-purple-200/60 dark:border-purple-800/60',
+        default => 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700',
+    };
 @endphp
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 
     @cannot('purchases.view')
-        {{-- No permission state --}}
-        <div class="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-6">
-            <div class="flex items-start gap-3">
-                <i data-lucide="shield-alert" class="w-5 h-5 text-amber-500 mt-0.5"></i>
-                <div>
-                    <h2 class="text-sm font-semibold text-amber-800 dark:text-amber-200">
-                        You don’t have permission to view purchases.
-                    </h2>
-                    <p class="mt-1 text-xs text-amber-700 dark:text-amber-300">
-                        Please contact your administrator to request access.
-                    </p>
-                </div>
-            </div>
+        <div class="rounded-2xl border border-amber-200 dark:border-amber-800/80 bg-amber-50/50 dark:bg-amber-950/30 p-6 text-center">
+            <h3 class="text-base font-bold text-amber-900 dark:text-amber-200">Access Restricted</h3>
+            <p class="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                You do not possess permission to inspect purchase orders.
+            </p>
         </div>
     @else
 
-    {{-- HEADER --}}
-    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div class="space-y-1">
-            <h1 class="text-2xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                <i data-lucide="shopping-cart" class="w-6 h-6 text-indigo-600 dark:text-indigo-400"></i>
-                <span>Purchase #{{ $purchase->id }}</span>
-            </h1>
+    {{-- Breadcrumbs & Header --}}
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200/80 dark:border-slate-800">
+        <div>
+            <nav class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mb-1.5">
+                <a href="{{ route('dashboard') }}" class="hover:text-slate-800 dark:hover:text-slate-200 transition">Dashboard</a>
+                <svg class="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                </svg>
+                <a href="{{ route('purchases.index') }}" class="hover:text-slate-800 dark:hover:text-slate-200 transition">Purchases</a>
+                <svg class="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                </svg>
+                <span class="text-slate-800 dark:text-slate-200 font-medium">Order #{{ $purchase->id }}</span>
+            </nav>
 
-            <div class="flex flex-wrap items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-                <span class="inline-flex items-center gap-1">
-                    <i data-lucide="user" class="w-4 h-4 text-indigo-500"></i>
-                    <span class="font-medium">{{ optional($purchase->supplier)->name ?? '—' }}</span>
+            <div class="flex flex-wrap items-center gap-2.5">
+                <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                    Purchase Order #PO-{{ str_pad($purchase->id, 5, '0', STR_PAD_LEFT) }}
+                </h1>
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border {{ $statusBadge }}">
+                    <span class="w-1.5 h-1.5 rounded-full {{ $status === 'completed' ? 'bg-emerald-500' : ($status === 'partial' ? 'bg-amber-500' : 'bg-rose-500') }}"></span>
+                    <span>{{ ucfirst($status) }}</span>
                 </span>
-
-                <span class="hidden md:inline text-gray-400">•</span>
-
-                <span class="inline-flex items-center gap-1">
-                    <i data-lucide="calendar" class="w-4 h-4 text-indigo-500"></i>
-                    {{ $date ? Carbon::parse($date)->format('M j, Y g:i A') : '—' }}
+                <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold uppercase tracking-wider border {{ $channelBadge }}">
+                    {{ $channel }}
                 </span>
-
-                <span class="hidden md:inline text-gray-400">•</span>
-
-                <span class="inline-flex items-center gap-1">
-                    <i data-lucide="receipt" class="w-4 h-4 text-indigo-500"></i>
-                    <span class="px-2 py-0.5 rounded-full text-xs font-semibold {{ $statusClass }}">
-                        {{ ucfirst($status) }}
-                    </span>
-                </span>
-
-                <span class="hidden md:inline text-gray-400">•</span>
-
-                <span class="inline-flex items-center gap-1">
-                    <i data-lucide="wallet" class="w-4 h-4 text-indigo-500"></i>
-                    <span class="px-2 py-0.5 rounded-md text-xs font-medium {{ $channelClass }}">
-                        {{ strtoupper($channel) }}
-                    </span>
-                </span>
-
                 @if($reference !== '')
-                    <span class="hidden md:inline text-gray-400">•</span>
-                    <span class="inline-flex items-center gap-1">
-                        <i data-lucide="hash" class="w-4 h-4 text-indigo-500"></i>
-                        Ref: <span class="font-medium">{{ $reference }}</span>
-                    </span>
-                @endif
-
-                {{-- Loan status badge --}}
-                @if($loan)
-                    <span class="hidden md:inline text-gray-400">•</span>
-                    <span class="inline-flex items-center gap-1">
-                        <i data-lucide="banknote" class="w-4 h-4 text-indigo-500"></i>
-                        <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold
-                            {{ $loan->status === 'paid'
-                                ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
-                                : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300' }}">
-                            Loan {{ ucfirst($loan->status) }}
-                        </span>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                        Ref: {{ $reference }}
                     </span>
                 @endif
             </div>
+
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Purchased from <strong class="text-slate-800 dark:text-slate-200">{{ optional($purchase->supplier)->name ?? 'Supplier' }}</strong> on {{ $date ? Carbon::parse($date)->format('d M Y, H:i') : '—' }} · Recorded by {{ optional($purchase->user)->name ?? 'System' }}.
+            </p>
         </div>
 
-        <div class="flex flex-wrap gap-2">
-            {{-- Back --}}
-            <a href="{{ route('purchases.index') }}" class="btn btn-secondary flex items-center gap-1 text-sm">
-                <i data-lucide="arrow-left" class="w-4 h-4"></i> Back
+        {{-- Actions --}}
+        <div class="flex flex-wrap items-center gap-2 shrink-0">
+            <a href="{{ route('purchases.index') }}"
+               class="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200/90 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700/80 shadow-sm transition">
+                <svg class="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+                <span>Purchases Hub</span>
             </a>
 
-            {{-- Edit purchase --}}
             @can('purchases.edit')
-                <a href="{{ route('purchases.edit', $purchase) }}" class="btn btn-outline flex items-center gap-1 text-sm">
-                    <i data-lucide="file-edit" class="w-4 h-4"></i> Edit
+                <a href="{{ route('purchases.edit', $purchase) }}"
+                   class="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200/90 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700/80 shadow-sm transition">
+                    <svg class="w-4 h-4 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                    </svg>
+                    <span>Edit Order</span>
                 </a>
-            @endcan
 
-            {{-- Invoice --}}
-            @can('purchases.view')
-                @if (Route::has('purchases.invoice'))
-                    <a href="{{ route('purchases.invoice', $purchase) }}"
-                       target="_blank"
-                       class="btn btn-success flex items-center gap-1 text-sm">
-                        <i data-lucide="printer" class="w-4 h-4"></i> Invoice (PDF)
-                    </a>
-                @endif
-            @endcan
-
-            {{-- Return to supplier --}}
-            @can('purchases.edit')
                 <button type="button"
-                        class="btn btn-warning text-sm flex items-center gap-1"
-                        @click="openPurchaseReturn()">
-                    <i data-lucide="u-turn-left" class="w-4 h-4"></i>
-                    Return to Supplier
+                        onclick="window.openPurchaseReturn()"
+                        class="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl text-amber-800 bg-amber-50 border border-amber-200 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800 shadow-sm transition">
+                    <svg class="w-4 h-4 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
+                    </svg>
+                    <span>Return to Supplier</span>
                 </button>
             @endcan
 
-            {{-- Add Loan Payment --}}
+            @if(Route::has('purchases.invoice'))
+                <a href="{{ route('purchases.invoice', $purchase) }}" target="_blank"
+                   class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-100 shadow-sm transition">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                    </svg>
+                    <span>Invoice PDF</span>
+                </a>
+            @endif
+
             @if($loan && $loan->status !== 'paid')
                 @can('loans.view')
-                    <a href="{{ route('loan-payments.create', $loan) }}" class="btn btn-primary text-sm flex items-center gap-1">
-                        <i data-lucide="plus-circle" class="w-4 h-4"></i>
-                        Add Loan Payment
+                    <a href="{{ route('loan-payments.create', $loan) }}"
+                       class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl bg-teal-600 text-white hover:bg-teal-500 shadow-sm transition">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                        </svg>
+                        <span>Settle Supplier Balance</span>
                     </a>
                 @endcan
             @endif
         </div>
     </div>
 
-    {{-- SUPPLIER / DETAILS / NOTES --}}
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="rounded-xl ring-1 ring-gray-200 dark:ring-gray-800 bg-white dark:bg-gray-900 p-4">
-            <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-2 flex items-center gap-2">
-                <i data-lucide="building-2" class="w-4 h-4 text-indigo-500"></i> Supplier
-            </h3>
-            <div class="text-sm text-gray-700 dark:text-gray-300 space-y-1">
-                <p class="font-medium">{{ optional($purchase->supplier)->name ?? '—' }}</p>
-                @if(optional($purchase->supplier)->phone)
-                    <p><span class="text-gray-500 dark:text-gray-400">Phone:</span> {{ $purchase->supplier->phone }}</p>
-                @endif
-                @if(optional($purchase->supplier)->email)
-                    <p><span class="text-gray-500 dark:text-gray-400">Email:</span> {{ $purchase->supplier->email }}</p>
-                @endif
+    {{-- Session Notifications --}}
+    @if(session('success'))
+        <div class="rounded-xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 p-4 text-sm text-teal-800 dark:text-teal-200 flex items-center justify-between shadow-sm">
+            <div class="flex items-center gap-2.5">
+                <svg class="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                </svg>
+                <span>{{ session('success') }}</span>
             </div>
-        </div>
-
-        <div class="rounded-xl ring-1 ring-gray-200 dark:ring-gray-800 bg-white dark:bg-gray-900 p-4">
-            <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-2 flex items-center gap-2">
-                <i data-lucide="info" class="w-4 h-4 text-indigo-500"></i> Details
-            </h3>
-            <div class="text-sm text-gray-700 dark:text-gray-300 space-y-1">
-                <p><span class="text-gray-500 dark:text-gray-400">Recorded By:</span> {{ optional($purchase->user)->name ?? '—' }}</p>
-                <p><span class="text-gray-500 dark:text-gray-400">Status:</span>
-                    <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold {{ $statusClass }}">{{ ucfirst($status) }}</span>
-                </p>
-                <p><span class="text-gray-500 dark:text-gray-400">Channel:</span>
-                    <span class="px-2 py-0.5 rounded-md text-[11px] font-medium {{ $channelClass }}">{{ strtoupper($channel) }}</span>
-                </p>
-                @if($reference !== '')
-                    <p><span class="text-gray-500 dark:text-gray-400">Reference:</span> {{ $reference }}</p>
-                @endif
-                @if($purchase->document_path)
-                    <p class="flex items-center gap-1 mt-1">
-                        <span class="text-gray-500 dark:text-gray-400">Document:</span>
-                        <a href="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($purchase->document_path) }}" target="_blank" class="text-indigo-600 hover:underline flex items-center gap-1">
-                            <i data-lucide="paperclip" class="w-3.5 h-3.5"></i> View File
-                        </a>
-                    </p>
-                @endif
-            </div>
-        </div>
-
-        <div class="rounded-xl ring-1 ring-gray-200 dark:ring-gray-800 bg-white dark:bg-gray-900 p-4">
-            <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-2 flex items-center gap-2">
-                <i data-lucide="sticky-note" class="w-4 h-4 text-indigo-500"></i> Notes
-            </h3>
-            <p class="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">
-                {{ trim((string)($purchase->notes ?? '—')) }}
-            </p>
-        </div>
-    </div>
-
-    {{-- KPI + PAYMENT PROGRESS --}}
-    <div class="grid grid-cols-1 lg:grid-cols-7 gap-3">
-        <div class="grid grid-cols-2 md:grid-cols-4 lg:col-span-5 gap-3">
-            <div class="rounded-xl ring-1 ring-gray-200 dark:ring-gray-800 bg-white dark:bg-gray-900 p-4">
-                <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Subtotal</p>
-                <p class="mt-1 text-lg font-semibold text-gray-900 dark:text-gray-100">RWF {{ $fmt($computedSubtotal) }}</p>
-            </div>
-            <div class="rounded-xl ring-1 ring-gray-200 dark:ring-gray-800 bg-white dark:bg-gray-900 p-4">
-                <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Tax</p>
-                <p class="mt-1 text-lg font-semibold text-blue-700 dark:text-blue-300">+ RWF {{ $fmt($tax) }}</p>
-            </div>
-            <div class="rounded-xl ring-1 ring-gray-200 dark:ring-gray-800 bg-white dark:bg-gray-900 p-4">
-                <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Discount</p>
-                <p class="mt-1 text-lg font-semibold text-amber-700 dark:text-amber-300">– RWF {{ $fmt($discount) }}</p>
-            </div>
-            <div class="rounded-xl ring-1 ring-gray-200 dark:ring-gray-800 bg-white dark:bg-gray-900 p-4">
-                <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Total</p>
-                <p class="mt-1 text-lg font-semibold text-gray-900 dark:text-gray-100">RWF {{ $fmt($total) }}</p>
-            </div>
-            <div class="rounded-xl ring-1 ring-gray-200 dark:ring-gray-800 bg-white dark:bg-gray-900 p-4">
-                <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Paid</p>
-                <p class="mt-1 text-lg font-semibold text-emerald-700 dark:text-emerald-300">RWF {{ $fmt($paid) }}</p>
-            </div>
-            <div class="rounded-xl ring-1 ring-gray-200 dark:ring-gray-800 bg-white dark:bg-gray-900 p-4">
-                <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Balance</p>
-                <p class="mt-1 text-lg font-semibold {{ $balance > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300' }}">
-                    RWF {{ $fmt($balance) }}
-                </p>
-            </div>
-        </div>
-
-        <div class="rounded-xl ring-1 ring-gray-200 dark:ring-gray-800 bg-white dark:bg-gray-900 p-4 lg:col-span-2">
-            <p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-2">Payment Progress</p>
-            <div class="w-full h-3 rounded-full bg-gray-200 dark:bg-gray-800 overflow-hidden">
-                <div class="h-3 rounded-full bg-emerald-500" style="width: {{ $paidPct }}%"></div>
-            </div>
-            <div class="mt-2 flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
-                <span>{{ $paidPct }}% paid</span>
-                <span>Paid: RWF {{ $fmt($paid) }} • Balance: RWF {{ $fmt($balance) }}</span>
-            </div>
-        </div>
-    </div>
-
-    {{-- LINKED LOAN --}}
-    @if($loan)
-        <div class="rounded-xl ring-1 ring-gray-200 dark:ring-gray-800 bg-white dark:bg-gray-900 p-6 space-y-4">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center gap-2">
-                    <i data-lucide="banknote" class="w-5 h-5 text-indigo-600 dark:text-indigo-300"></i>
-                    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Linked Loan</h3>
-                </div>
-                <span class="px-2 py-1 rounded-full text-xs font-medium
-                    {{ $loan->status === 'paid'
-                        ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
-                        : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300' }}">
-                    {{ ucfirst($loan->status) }}
-                </span>
-            </div>
-
-            <div class="grid md:grid-cols-2 gap-4 text-sm">
-                <p><strong>Type:</strong> {{ ucfirst($loan->type) }}</p>
-                <p><strong>Amount:</strong> RWF {{ $fmt($loanAmt) }}</p>
-                <p><strong>Loan Date:</strong> {{ optional($loan->loan_date)->format('Y-m-d') }}</p>
-                @if($loan->due_date)
-                    <p><strong>Due Date:</strong> {{ optional($loan->due_date)->format('Y-m-d') }}</p>
-                @endif
-            </div>
-
-            {{-- Loan progress --}}
-            <div>
-                <div class="flex justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
-                    <span>Repayment Progress</span>
-                    <span>{{ $loanPct }}%</span>
-                </div>
-                <div class="w-full h-2 rounded-full bg-gray-200 dark:bg-gray-800 overflow-hidden">
-                    <div class="h-2 rounded-full bg-emerald-500" style="width: {{ $loanPct }}%"></div>
-                </div>
-                <div class="mt-1 text-xs text-gray-600 dark:text-gray-400">
-                    Paid: RWF {{ $fmt($loanPaid) }} • Remaining: RWF {{ $fmt($loanRemain) }}
-                </div>
-            </div>
-
-            <div class="flex items-center justify-between">
-                <div class="text-xs text-gray-500 dark:text-gray-400">
-                    Loan #{{ $loan->id }} • {{ $loan->type === 'taken' ? 'We owe supplier' : 'Customer owes us' }}
-                </div>
-                @if($loan->status !== 'paid')
-                    @can('loans.view')
-                        <a href="{{ route('loan-payments.create', $loan) }}" class="btn btn-primary btn-sm">
-                            Add Loan Payment
-                        </a>
-                    @endcan
-                @endif
-            </div>
-
-            {{-- Loan payment history --}}
-            @if($loan->payments->count())
-                <div class="overflow-x-auto mt-3">
-                    <table class="min-w-full text-sm divide-y divide-gray-200 dark:divide-gray-800">
-                        <thead class="bg-gray-50 dark:bg-gray-800/60 text-xs uppercase text-gray-600 dark:text-gray-300">
-                            <tr>
-                                <th class="px-4 py-2 text-left">Date</th>
-                                <th class="px-4 py-2 text-right">Amount</th>
-                                <th class="px-4 py-2 text-left">Method</th>
-                                <th class="px-4 py-2 text-left">Recorded By</th>
-                                <th class="px-4 py-2 text-left">Notes</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-                            @foreach($loan->payments as $p)
-                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-900/30">
-                                    <td class="px-4 py-2">{{ optional($p->payment_date)->format('Y-m-d') }}</td>
-                                    <td class="px-4 py-2 text-right text-emerald-700 dark:text-emerald-300">
-                                        RWF {{ $fmt($p->amount) }}
-                                    </td>
-                                    <td class="px-4 py-2">{{ strtoupper($p->method) }}</td>
-                                    <td class="px-4 py-2">{{ optional($p->user)->name ?? 'System' }}</td>
-                                    <td class="px-4 py-2">{{ $p->notes ?? '—' }}</td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            @else
-                <p class="text-sm text-gray-500 dark:text-gray-400">No loan payments yet.</p>
-            @endif
+            <button type="button" @click="$el.parentElement.remove()" class="text-teal-600 dark:text-teal-400">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
         </div>
     @endif
 
-    {{-- ITEMS TABLE --}}
-    <div class="rounded-2xl overflow-hidden ring-1 ring-gray-200 dark:ring-gray-800 bg-white dark:bg-gray-900">
-        <div class="px-5 py-3 border-b border-gray-200 dark:border-gray-800 flex items-center gap-2">
-            <i data-lucide="list" class="w-4 h-4 text-indigo-500"></i>
-            <h2 class="text-sm font-semibold text-gray-800 dark:text-gray-200">Items</h2>
+    {{-- 4-KPI Deck --}}
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {{-- Card 1: Total Order Amount --}}
+        <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs">
+            <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Gross Order Total</span>
+            <div class="mt-2 flex items-baseline gap-1.5">
+                <span class="text-xs text-slate-400 font-normal">RWF</span>
+                <span class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white tabular-nums">
+                    {{ $fmt2($total) }}
+                </span>
+            </div>
+            <div class="mt-1 flex items-center justify-between text-[11px] text-slate-400">
+                <span>Subtotal: {{ $fmt2($computedSubtotal) }}</span>
+                @if($tax > 0)<span>+Tax: {{ $fmt2($tax) }}</span>@endif
+            </div>
         </div>
+
+        {{-- Card 2: Settled / Paid --}}
+        <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs">
+            <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Amount Settled</span>
+            <div class="mt-2 flex items-baseline gap-1.5">
+                <span class="text-xs text-slate-400 font-normal">RWF</span>
+                <span class="text-2xl font-bold tracking-tight text-teal-600 dark:text-teal-400 tabular-nums">
+                    {{ $fmt2($paid) }}
+                </span>
+            </div>
+            <div class="mt-1 flex items-center justify-between text-[11px]">
+                <span class="text-slate-400">Settlement Progress:</span>
+                <span class="font-bold text-teal-600 dark:text-teal-400">{{ $paidPct }}%</span>
+            </div>
+        </div>
+
+        {{-- Card 3: Balance Due --}}
+        <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs">
+            <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Outstanding Balance</span>
+            <div class="mt-2 flex items-baseline gap-1.5">
+                <span class="text-xs text-slate-400 font-normal">RWF</span>
+                <span class="text-2xl font-bold tracking-tight tabular-nums {{ $balance > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400' }}">
+                    {{ $fmt2($balance) }}
+                </span>
+            </div>
+            <p class="mt-1 text-[11px] text-slate-400">
+                {{ $balance > 0 ? 'Due to supplier' : 'Fully settled' }}
+            </p>
+        </div>
+
+        {{-- Card 4: Returns & Refunds --}}
+        <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs">
+            <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Returned to Supplier</span>
+            <div class="mt-2 flex items-baseline gap-1.5">
+                <span class="text-xs text-slate-400 font-normal">RWF</span>
+                <span class="text-2xl font-bold tracking-tight text-amber-600 dark:text-amber-400 tabular-nums">
+                    {{ $fmt2($sumReturnValue) }}
+                </span>
+            </div>
+            <div class="mt-1 flex items-center justify-between text-[11px] text-slate-400">
+                <span>{{ $returns->count() }} return ticket(s)</span>
+                @if($sumCashRefunds > 0)
+                    <span class="text-emerald-600 font-bold">Refund: {{ $fmt2($sumCashRefunds) }}</span>
+                @endif
+            </div>
+        </div>
+    </div>
+
+    {{-- Order Context Cards --}}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {{-- Supplier Profile Card --}}
+        <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs">
+            <div class="flex items-center gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
+                <svg class="w-4 h-4 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                </svg>
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">Supplier Vendor</h3>
+            </div>
+            <div class="mt-3 space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
+                <div class="font-bold text-slate-900 dark:text-white text-sm">
+                    {{ optional($purchase->supplier)->name ?? 'Walk-in / Cash Vendor' }}
+                </div>
+                @if(optional($purchase->supplier)->phone)
+                    <div><span class="text-slate-400">Phone:</span> <span class="font-mono">{{ $purchase->supplier->phone }}</span></div>
+                @endif
+                @if(optional($purchase->supplier)->email)
+                    <div><span class="text-slate-400">Email:</span> {{ $purchase->supplier->email }}</div>
+                @endif
+                @if(optional($purchase->supplier)->address)
+                    <div><span class="text-slate-400">Address:</span> {{ $purchase->supplier->address }}</div>
+                @endif
+            </div>
+        </div>
+
+        {{-- Order Metadata Card --}}
+        <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs">
+            <div class="flex items-center gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
+                <svg class="w-4 h-4 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">Transaction Details</h3>
+            </div>
+            <div class="mt-3 space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Order Date:</span>
+                    <span class="font-mono font-medium">{{ $date ? Carbon::parse($date)->format('d M Y') : '—' }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Payment Channel:</span>
+                    <span class="font-bold uppercase">{{ $channel }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-slate-400">Invoice / Reference:</span>
+                    <span class="font-mono font-medium">{{ $reference ?: 'None' }}</span>
+                </div>
+                @if($loan)
+                    <div class="flex justify-between">
+                        <span class="text-slate-400">Supplier Loan Ticket:</span>
+                        <span class="font-bold {{ $loan->status === 'paid' ? 'text-teal-600' : 'text-amber-600' }}">
+                            Loan #{{ $loan->id }} ({{ ucfirst($loan->status) }})
+                        </span>
+                    </div>
+                @endif
+            </div>
+        </div>
+
+        {{-- Notes & Attachments Card --}}
+        <div class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs">
+            <div class="flex items-center gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
+                <svg class="w-4 h-4 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+                </svg>
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">Notes & File</h3>
+            </div>
+            <div class="mt-3 text-xs space-y-2">
+                @if($purchase->notes)
+                    <p class="text-slate-700 dark:text-slate-300 leading-relaxed italic bg-slate-50 dark:bg-slate-800/40 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                        "{{ $purchase->notes }}"
+                    </p>
+                @else
+                    <p class="text-slate-400 italic">No notes recorded for this order.</p>
+                @endif
+
+                @if(!empty($purchase->document_path))
+                    <a href="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($purchase->document_path) }}" target="_blank"
+                       class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-teal-50 text-teal-700 hover:bg-teal-100 dark:bg-teal-950/40 dark:text-teal-300 border border-teal-200 dark:border-teal-800 transition">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        <span>View Attached Document</span>
+                    </a>
+                @endif
+            </div>
+        </div>
+    </div>
+
+    {{-- Line Items Table Card --}}
+    <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/40">
+            <div class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-teal-600 dark:text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
+                </svg>
+                <h2 class="text-sm font-bold text-slate-900 dark:text-white">Purchased Items Breakdown</h2>
+            </div>
+            <span class="text-xs text-slate-400 font-medium">{{ $purchase->items->count() }} line items</span>
+        </div>
+
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
-                <thead class="bg-gray-50 dark:bg-gray-800/50">
-                    <tr class="text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                        <th class="px-5 py-3">Product</th>
-                        <th class="px-5 py-3">Qty</th>
-                        <th class="px-5 py-3">Unit Cost</th>
-                        <th class="px-5 py-3">Line Total</th>
+            <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                    <tr class="border-b border-slate-200/80 dark:border-slate-800 text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider bg-slate-50/30 dark:bg-slate-900/30">
+                        <th class="py-3 px-4">#</th>
+                        <th class="py-3 px-4">Raw Material / Product</th>
+                        <th class="py-3 px-4">Category</th>
+                        <th class="py-3 px-4 text-right">Quantity</th>
+                        <th class="py-3 px-4 text-right">Unit Purchase Cost</th>
+                        <th class="py-3 px-4 text-right">Line Total</th>
+                        <th class="py-3 px-4 text-right">Returned Qty</th>
+                        <th class="py-3 px-4 text-right">Net Received</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
-                    @forelse($purchase->items as $item)
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800/80">
+                    @foreach($purchase->items as $idx => $it)
                         @php
-                            $qty = (float)$item->quantity;
-                            $uc  = (float)$item->unit_cost;
-                            $lt  = $item->total_cost ?? $qty * $uc;
+                            $prod = $it->product;
+                            $retQty = (float) optional($it->returnItems)->sum('quantity');
+                            $netQty = max(0, (float)$it->quantity - $retQty);
+                            $isRawMat = ($prod->type ?? '') === 'raw_material';
+                            $prodLink = $prod ? ($isRawMat ? route('raw-materials.show', $prod) : route('products.show', $prod)) : null;
                         @endphp
-                        <tr class="text-sm">
-                            <td class="px-5 py-3 text-gray-900 dark:text-gray-100">
-                                {{ optional($item->product)->name ?? ('#'.$item->product_id) }}
-                                @if(optional($item->product)->category)
-                                    <span class="ml-1 text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
-                                        {{ $item->product->category->name }}
+                        <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/30 transition">
+                            <td class="py-3 px-4 font-mono text-slate-400">{{ $idx + 1 }}</td>
+                            <td class="py-3 px-4">
+                                @if($prodLink)
+                                    <a href="{{ $prodLink }}" class="font-semibold text-slate-900 dark:text-white hover:text-teal-600 transition">
+                                        {{ $prod->name ?? 'Item #'.$it->product_id }}
+                                    </a>
+                                @else
+                                    <span class="font-semibold text-slate-900 dark:text-white">
+                                        {{ $prod->name ?? 'Item #'.$it->product_id }}
                                     </span>
                                 @endif
+                                <div class="text-[11px] font-mono text-slate-400">Unit: {{ $prod->unit ?? 'pcs' }}</div>
                             </td>
-                            <td class="px-5 py-3 text-gray-700 dark:text-gray-300">
-                                {{ $fmt($qty) }}
+                            <td class="py-3 px-4 text-slate-500">
+                                {{ optional(optional($prod)->category)->name ?? 'Uncategorized' }}
                             </td>
-                            <td class="px-5 py-3 text-gray-700 dark:text-gray-300">
-                                RWF {{ $fmt($uc) }}
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-900 dark:text-white">
+                                {{ $fmt2($it->quantity) }} {{ $prod->unit ?? 'pcs' }}
                             </td>
-                            <td class="px-5 py-3 font-medium text-gray-900 dark:text-gray-100">
-                                RWF {{ $fmt($lt) }}
+                            <td class="py-3 px-4 text-right font-mono text-slate-700 dark:text-slate-300">
+                                {{ $fmt2($it->unit_cost) }} RWF
+                            </td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-slate-900 dark:text-white">
+                                {{ $fmt2($it->total_cost ?? ($it->quantity * $it->unit_cost)) }} RWF
+                            </td>
+                            <td class="py-3 px-4 text-right font-mono {{ $retQty > 0 ? 'text-amber-600 font-bold' : 'text-slate-400' }}">
+                                {{ $retQty > 0 ? $fmt2($retQty) . ' ' . ($prod->unit ?? 'pcs') : '—' }}
+                            </td>
+                            <td class="py-3 px-4 text-right font-mono font-bold text-teal-600 dark:text-teal-400">
+                                {{ $fmt2($netQty) }} {{ $prod->unit ?? 'pcs' }}
                             </td>
                         </tr>
-                    @empty
-                        <tr>
-                            <td colspan="4" class="px-5 py-6 text-center text-gray-500 dark:text-gray-400">No items.</td>
-                        </tr>
-                    @endforelse
+                    @endforeach
                 </tbody>
-                <tfoot class="bg-gray-50/70 dark:bg-gray-800/50 text-sm">
+                <tfoot class="border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 text-xs font-bold">
                     <tr>
-                        <td colspan="3" class="px-5 py-3 text-right text-gray-600 dark:text-gray-300">Subtotal</td>
-                        <td class="px-5 py-3 font-medium text-gray-900 dark:text-gray-100">
-                            RWF {{ $fmt($computedSubtotal) }}
-                        </td>
+                        <td colspan="5" class="py-3 px-4 text-right text-slate-600 dark:text-slate-400 uppercase tracking-wider">Subtotal:</td>
+                        <td class="py-3 px-4 text-right font-mono text-slate-900 dark:text-white">{{ $fmt2($computedSubtotal) }} RWF</td>
+                        <td colspan="2"></td>
                     </tr>
-                    <tr>
-                        <td colspan="3" class="px-5 py-3 text-right text-gray-600 dark:text-gray-300">Tax</td>
-                        <td class="px-5 py-3 font-medium text-blue-700 dark:text-blue-300">
-                            + RWF {{ $fmt($tax) }}
-                        </td>
-                    </tr>
-                    <tr>
-                        <td colspan="3" class="px-5 py-3 text-right text-gray-600 dark:text-gray-300">Discount</td>
-                        <td class="px-5 py-3 font-medium text-amber-700 dark:text-amber-300">
-                            – RWF {{ $fmt($discount) }}
-                        </td>
-                    </tr>
-                    <tr>
-                        <td colspan="3" class="px-5 py-3 text-right text-gray-800 dark:text-gray-100">Total</td>
-                        <td class="px-5 py-3 font-semibold text-gray-900 dark:text-gray-100">
-                            RWF {{ $fmt($total) }}
-                        </td>
-                    </tr>
-                    <tr>
-                        <td colspan="3" class="px-5 py-3 text-right text-gray-600 dark:text-gray-300">Paid</td>
-                        <td class="px-5 py-3 font-medium text-emerald-700 dark:text-emerald-300">
-                            RWF {{ $fmt($paid) }}
-                        </td>
-                    </tr>
-                    <tr>
-                        <td colspan="3" class="px-5 py-3 text-right text-gray-600 dark:text-gray-300">Balance</td>
-                        <td class="px-5 py-3 font-semibold {{ $balance>0?'text-rose-700 dark:text-rose-300':'text-emerald-700 dark:text-emerald-300' }}">
-                            RWF {{ $fmt($balance) }}
-                        </td>
+                    @if($tax > 0)
+                        <tr>
+                            <td colspan="5" class="py-2 px-4 text-right text-slate-600 dark:text-slate-400 uppercase tracking-wider">Tax:</td>
+                            <td class="py-2 px-4 text-right font-mono text-slate-900 dark:text-white">+{{ $fmt2($tax) }} RWF</td>
+                            <td colspan="2"></td>
+                        </tr>
+                    @endif
+                    @if($discount > 0)
+                        <tr>
+                            <td colspan="5" class="py-2 px-4 text-right text-slate-600 dark:text-slate-400 uppercase tracking-wider">Discount:</td>
+                            <td class="py-2 px-4 text-right font-mono text-amber-600">-{{ $fmt2($discount) }} RWF</td>
+                            <td colspan="2"></td>
+                        </tr>
+                    @endif
+                    <tr class="border-t border-slate-200 dark:border-slate-700 text-sm">
+                        <td colspan="5" class="py-3 px-4 text-right uppercase tracking-wider text-slate-900 dark:text-white">Order Total:</td>
+                        <td class="py-3 px-4 text-right font-mono text-teal-600 dark:text-teal-400">{{ $fmt2($total) }} RWF</td>
+                        <td colspan="2"></td>
                     </tr>
                 </tfoot>
             </table>
         </div>
     </div>
 
-    {{-- TRANSACTION CARD --}}
-    @if($purchase->transaction)
-        @php $txn = $purchase->transaction; @endphp
-        <div class="rounded-2xl ring-1 ring-emerald-200 dark:ring-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/40 p-5 space-y-2">
-            <div class="flex items-center gap-2">
-                <i data-lucide="credit-card" class="w-5 h-5 text-emerald-700 dark:text-emerald-300"></i>
-                <h3 class="text-sm font-semibold text-emerald-950 dark:text-emerald-200">Payment Transaction</h3>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 text-sm">
-                <div>
-                    <span class="text-gray-600 dark:text-gray-400">Amount:</span>
-                    <span class="font-semibold">RWF {{ $fmt($txn->amount) }}</span>
-                </div>
-                <div>
-                    <span class="text-gray-600 dark:text-gray-400">Date:</span>
-                    {{ \Illuminate\Support\Str::of($txn->transaction_date)->substr(0,10) }}
-                </div>
-                <div>
-                    <span class="text-gray-600 dark:text-gray-400">Channel:</span>
-                    {{ strtoupper($txn->method ?? $channel) }}
-                </div>
-                <div>
-                    <span class="text-gray-600 dark:text-gray-400">Ref:</span>
-                    {{ $reference ?: '—' }}
-                </div>
-            </div>
-            @if($txn->notes)
-                <p class="text-sm text-emerald-900/90 dark:text-emerald-200/90 mt-1">
-                    {{ $txn->notes }}
-                </p>
-            @endif
-        </div>
-    @endif
-
-    {{-- RETURNS LIST --}}
-    @if($returns->count())
-        <div class="rounded-2xl ring-1 ring-gray-200 dark:ring-gray-800 bg-white dark:bg-gray-900 p-5 space-y-4">
-            <div class="flex items-center justify-between gap-2 flex-wrap">
+    {{-- Returns Section (If processed) --}}
+    @if($returns->isNotEmpty())
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden">
+            <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-amber-50/40 dark:bg-amber-950/20">
                 <div class="flex items-center gap-2">
-                    <i data-lucide="u-turn-left" class="w-5 h-5 text-indigo-600 dark:text-indigo-300"></i>
-                    <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">Returns to Supplier</h3>
+                    <svg class="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
+                    </svg>
+                    <h2 class="text-sm font-bold text-slate-900 dark:text-white">Processed Supplier Returns</h2>
                 </div>
-                <div class="flex gap-4 text-sm flex-wrap">
-                    <span class="text-gray-600 dark:text-gray-300">
-                        Returned Value:
-                        <span class="font-semibold">RWF {{ number_format($sumReturnValue,2) }}</span>
-                    </span>
-                    <span class="text-gray-600 dark:text-gray-300">
-                        Cash Refunds:
-                        <span class="font-semibold text-emerald-700 dark:text-emerald-300">
-                            RWF {{ number_format($sumCashRefunds,2) }}
-                        </span>
-                    </span>
-                    <span class="text-gray-600 dark:text-gray-300">
-                        Net Exposure:
-                        <span class="font-semibold {{ $netExposure>0?'text-rose-700 dark:text-rose-300':'text-emerald-700 dark:text-emerald-300' }}">
-                            RWF {{ number_format($netExposure,2) }}
-                        </span>
-                    </span>
-                </div>
+                <span class="text-xs text-amber-700 dark:text-amber-300 font-bold">{{ $returns->count() }} return(s)</span>
             </div>
 
-            <div class="overflow-x-auto border rounded-lg">
-                <table class="min-w-full text-sm divide-y divide-gray-200 dark:divide-gray-800">
-                    <thead class="bg-gray-50 dark:bg-gray-800/50">
-                        <tr class="text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                            <th class="px-4 py-2">Date</th>
-                            <th class="px-4 py-2">Channel</th>
-                            <th class="px-4 py-2">Reference</th>
-                            <th class="px-4 py-2 text-right">Refund</th>
-                            <th class="px-4 py-2 text-right">Return Value</th>
-                            <th class="px-4 py-2 text-right">Action</th>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="border-b border-slate-200/80 dark:border-slate-800 text-[11px] font-semibold text-slate-500 uppercase tracking-wider bg-slate-50/30">
+                            <th class="py-2.5 px-4">Date</th>
+                            <th class="py-2.5 px-4">Ticket</th>
+                            <th class="py-2.5 px-4 text-right">Return Value</th>
+                            <th class="py-2.5 px-4 text-right">Cash Refund</th>
+                            <th class="py-2.5 px-4">Items Returned</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800/80">
                         @foreach($returns as $ret)
-                            <tr x-data="{ show:false }">
-                                <td class="px-4 py-2">
-                                    {{ $ret->return_date ? \Carbon\Carbon::parse($ret->return_date)->format('M j, Y') : '—' }}
-                                </td>
-                                <td class="px-4 py-2">{{ strtoupper($ret->payment_channel ?? '-') }}</td>
-                                <td class="px-4 py-2">{{ $ret->method ?: '—' }}</td>
-                                <td class="px-4 py-2 text-right text-emerald-700 dark:text-emerald-300">
-                                    RWF {{ number_format($ret->refund_amount, 2) }}
-                                </td>
-                                <td class="px-4 py-2 text-right font-medium">
-                                    RWF {{ number_format($ret->total_amount, 2) }}
-                                </td>
-                                <td class="px-4 py-2">
-                                    <div class="flex items-center justify-end gap-2">
-                                        @if($ret->items->count())
-                                            <button type="button"
-                                                    @click="show = !show"
-                                                    class="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-700 hover:underline">
-                                                <i data-lucide="chevron-down"
-                                                   class="w-4 h-4 transition-transform"
-                                                   :class="show ? 'rotate-180' : ''"></i>
-                                                <span x-text="show ? 'Hide' : 'Details'"></span>
-                                            </button>
-                                        @endif
-
-                                        @can('purchases.edit')
-                                            <form id="return-delete-form-{{ $ret->id }}" method="POST"
-                                                  action="{{ route('purchases.returns.destroy', $ret) }}"
-                                                  class="inline">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="button"
-                                                        @click="$dispatch('open-delete-modal', {
-                                                            formId: 'return-delete-form-{{ $ret->id }}',
-                                                            title: 'Delete Return',
-                                                            message: 'Delete this return and revert stock/ledger?',
-                                                            confirmText: 'Delete Return',
-                                                            confirmColor: 'btn-danger'
-                                                        })"
-                                                        class="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700 hover:underline">
-                                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
-                                                    <span>Delete</span>
-                                                </button>
-                                            </form>
-                                        @endcan
-                                    </div>
+                            <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/30">
+                                <td class="py-2.5 px-4 font-mono">{{ $ret->return_date ? \Carbon\Carbon::parse($ret->return_date)->format('d M Y') : '—' }}</td>
+                                <td class="py-2.5 px-4 font-mono font-bold">#RET-{{ $ret->id }}</td>
+                                <td class="py-2.5 px-4 text-right font-mono font-bold text-amber-600">{{ $fmt2($ret->total_amount) }} RWF</td>
+                                <td class="py-2.5 px-4 text-right font-mono font-bold text-emerald-600">{{ $fmt2($ret->refund_amount) }} RWF</td>
+                                <td class="py-2.5 px-4 text-slate-600 dark:text-slate-300">
+                                    @foreach($ret->items as $rit)
+                                        <span class="inline-block mr-2 px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[11px]">
+                                            {{ optional($rit->product)->name ?? 'Item' }} × {{ $fmt2($rit->quantity) }}
+                                        </span>
+                                    @endforeach
                                 </td>
                             </tr>
-
-                            @if($ret->items->count())
-                                <tr x-show="show" x-cloak class="bg-gray-50/60 dark:bg-gray-800/30">
-                                    <td colspan="6" class="px-4 py-2">
-                                        <div class="text-xs text-gray-600 dark:text-gray-300">
-                                            <span class="font-semibold mr-2">Items:</span>
-                                            @foreach($ret->items as $it)
-                                                <span class="inline-block mr-4 mb-1">
-                                                    {{ optional($it->product)->name ?? '#'.$it->product_id }}
-                                                    × {{ number_format($it->quantity,2) }}
-                                                    @ RWF {{ number_format($it->unit_cost,2) }}
-                                                </span>
-                                            @endforeach
-                                        </div>
-                                    </td>
-                                </tr>
-                            @endif
                         @endforeach
                     </tbody>
                 </table>
@@ -619,25 +476,16 @@
     @endcannot
 </div>
 
-{{-- Return modal only for users who can edit purchases --}}
+{{-- Return Modal Mount --}}
 @can('purchases.edit')
-    {{-- Modal mount (no auto-open here) --}}
     @include('purchases._return_modal', ['purchase' => $purchase])
 @endcan
 @endsection
 
 @push('scripts')
-<script src="https://unpkg.com/lucide@latest"></script>
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-  if (window.lucide) {
-    lucide.createIcons();
-  }
-});
-
-// global helper used by the header button
 window.openPurchaseReturn = function(){
-  window.dispatchEvent(new CustomEvent('open-purchase-return'));
+    window.dispatchEvent(new CustomEvent('open-purchase-return'));
 };
 </script>
 @endpush

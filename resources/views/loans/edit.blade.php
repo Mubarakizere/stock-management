@@ -1,82 +1,61 @@
 @extends('layouts.app')
-@section('title', "Edit Loan #{$loan->id}")
+@section('title', 'Edit Loan #LN-' . str_pad($loan->id, 5, '0', STR_PAD_LEFT))
 
 @section('content')
-<style>[x-cloak]{display:none!important}</style>
 @php
-    $paid      = (float) $loan->payments()->sum('amount');
-    $remaining = max((float)($loan->amount ?? 0) - $paid, 0);
-    $progress  = ($loan->amount ?? 0) > 0 ? round(($paid / $loan->amount) * 100) : 0;
+    $loanCode = '#LN-' . str_pad($loan->id, 5, '0', STR_PAD_LEFT);
 @endphp
 
-<div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
-     x-data="loanEdit(@js([
-        'initType'     => old('type', $loan->type),
-        'initLoanDate' => old('loan_date', optional($loan->loan_date)->format('Y-m-d')),
-        'initDueDate'  => old('due_date', optional($loan->due_date)->format('Y-m-d')),
-        'initAmount'   => old('amount', number_format($loan->amount, 2, '.', '')),
-        'initStatus'   => old('status', $loan->status),
-     ]))"
-     x-init="init()"
->
+<div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6"
+     x-data="{
+        type: '{{ old('type', $loan->type) }}',
+        customerId: '{{ old('customer_id', $loan->customer_id ?? '') }}',
+        supplierId: '{{ old('supplier_id', $loan->supplier_id ?? '') }}'
+     }">
 
-    {{-- Header --}}
-    <div class="flex items-start justify-between gap-3 mb-6">
-        <div class="flex items-center gap-2">
-            <i data-lucide="wallet" class="w-6 h-6 text-indigo-600 dark:text-indigo-400"></i>
-            <h1 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                Edit Loan #{{ $loan->id }}
-            </h1>
+    {{-- Breadcrumb & Title --}}
+    <div>
+        <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+            <a href="{{ route('dashboard') }}" class="hover:text-slate-700 dark:hover:text-slate-300 transition">Dashboard</a>
+            <span>/</span>
+            <a href="{{ route('loans.index') }}" class="hover:text-slate-700 dark:hover:text-slate-300 transition">Loans Portfolio</a>
+            <span>/</span>
+            <span class="text-teal-600 dark:text-teal-400 font-semibold">Edit {{ $loanCode }}</span>
         </div>
-        <div class="flex items-center gap-2">
-            @can('loans.view')
-                <a href="{{ route('loans.show', $loan) }}" class="btn btn-secondary text-sm flex items-center gap-1">
-                    <i data-lucide="eye" class="w-4 h-4"></i> View
-                </a>
-                <a href="{{ route('loans.index') }}" class="btn btn-outline text-sm flex items-center gap-1">
-                    <i data-lucide="arrow-left" class="w-4 h-4"></i> Back
-                </a>
-            @endcan
+        <div class="flex items-center justify-between mt-2">
+            <div>
+                <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
+                    <span class="p-2 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20">
+                        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                        </svg>
+                    </span>
+                    Edit Loan {{ $loanCode }}
+                </h1>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Update principal amount, repayment due date, status, or counterparty.
+                </p>
+            </div>
+            <a href="{{ route('loans.show', $loan) }}"
+               class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-200 dark:border-slate-800 dark:hover:bg-slate-800 transition shadow-sm">
+                <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+                Back to Loan
+            </a>
         </div>
     </div>
 
-    {{-- Top summary --}}
-    <section class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm p-5 mb-6">
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
-            <div>
-                <p class="text-gray-500 dark:text-gray-400">Amount</p>
-                <p class="text-lg font-semibold text-indigo-600 dark:text-indigo-400">
-                    {{ number_format($loan->amount, 2) }}
-                </p>
-            </div>
-            <div>
-                <p class="text-gray-500 dark:text-gray-400">Paid</p>
-                <p class="text-lg font-semibold text-green-600 dark:text-green-400">
-                    {{ number_format($paid, 2) }}
-                </p>
-            </div>
-            <div>
-                <p class="text-gray-500 dark:text-gray-400">Remaining</p>
-                <p class="text-lg font-semibold {{ $remaining <= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400' }}">
-                    {{ number_format($remaining, 2) }}
-                </p>
-            </div>
-        </div>
-        <div class="mt-3">
-            <div class="flex justify-between items-center mb-1 text-xs text-gray-600 dark:text-gray-400">
-                <span>Repayment Progress</span><span>{{ $progress }}%</span>
-            </div>
-            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                <div class="bg-green-500 h-2 rounded-full transition-all duration-500" style="width: {{ $progress }}%"></div>
-            </div>
-        </div>
-    </section>
-
-    {{-- Validation Errors --}}
+    {{-- Error Alert --}}
     @if ($errors->any())
-        <div class="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 text-red-700 dark:text-red-300 rounded-lg p-4 mb-6">
-            <p class="font-medium">There were some problems with your input:</p>
-            <ul class="list-disc pl-5 mt-2 text-sm space-y-1">
+        <div class="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-xs text-rose-800 dark:text-rose-200">
+            <div class="font-bold flex items-center gap-1.5 mb-1 text-rose-900 dark:text-rose-100">
+                <svg class="w-4 h-4 text-rose-600 dark:text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                Please correct the following errors:
+            </div>
+            <ul class="list-disc list-inside space-y-0.5 pl-5">
                 @foreach ($errors->all() as $error)
                     <li>{{ $error }}</li>
                 @endforeach
@@ -84,299 +63,165 @@
         </div>
     @endif
 
-    {{-- Form --}}
-    <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm">
+    {{-- Form Container --}}
+    <div class="p-6 sm:p-8 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-sm">
         @can('loans.edit')
-            <form method="POST" action="{{ route('loans.update', $loan) }}" class="p-6 space-y-6">
+            <form action="{{ route('loans.update', $loan) }}" method="POST" class="space-y-6">
                 @csrf
                 @method('PUT')
 
-                {{-- Type --}}
+                {{-- Direction Radio Cards --}}
                 <div>
-                    <label for="loan_type" class="form-label">
-                        Loan Type <span class="text-red-500">*</span>
+                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                        Loan Direction <span class="text-rose-500">*</span>
                     </label>
-                    <select name="type" id="loan_type" class="form-select w-full"
-                            required
-                            x-model="type"
-                            @change="onTypeChange()">
-                        <option value="given">Given (We lend / customer owes us)</option>
-                        <option value="taken">Taken (We owe supplier)</option>
-                    </select>
-                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        <span x-show="type==='given'">This loan belongs to a Customer.</span>
-                        <span x-show="type==='taken'">This loan belongs to a Supplier.</span>
-                    </p>
-                    @error('type') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
-                </div>
-
-                {{-- Parties --}}
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {{-- Customer --}}
-                    <div x-show="type==='given'" x-cloak>
-                        <label for="customer_id" class="form-label">
-                            Customer <span class="text-red-500" x-show="type==='given'">*</span>
-                        </label>
-                        <select name="customer_id" id="customer_id"
-                                class="form-select w-full"
-                                :required="type==='given'"
-                                x-ref="customer">
-                            <option value="">Select Customer</option>
-                            @foreach ($customers as $c)
-                                <option value="{{ $c->id }}"
-                                    {{ (string)old('customer_id', (string)$loan->customer_id) === (string)$c->id ? 'selected' : '' }}>
-                                    {{ $c->name }}
-                                </option>
-                            @endforeach
-                        </select>
-                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400" x-show="$refs.customer?.value">
-                            Selected:
-                            <span class="font-medium" x-text="$refs.customer?.selectedOptions[0]?.text || ''"></span>
-                        </p>
-                        @error('customer_id') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
-                    </div>
-
-                    {{-- Supplier --}}
-                    <div x-show="type==='taken'" x-cloak>
-                        <label for="supplier_id" class="form-label">
-                            Supplier <span class="text-red-500" x-show="type==='taken'">*</span>
-                        </label>
-                        <select name="supplier_id" id="supplier_id"
-                                class="form-select w-full"
-                                :required="type==='taken'"
-                                x-ref="supplier">
-                            <option value="">Select Supplier</option>
-                            @foreach ($suppliers as $s)
-                                <option value="{{ $s->id }}"
-                                    {{ (string)old('supplier_id', (string)$loan->supplier_id) === (string)$s->id ? 'selected' : '' }}>
-                                    {{ $s->name }}
-                                </option>
-                            @endforeach
-                        </select>
-                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400" x-show="$refs.supplier?.value">
-                            Selected:
-                            <span class="font-medium" x-text="$refs.supplier?.selectedOptions[0]?.text || ''"></span>
-                        </p>
-                        @error('supplier_id') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
-                    </div>
-                </div>
-
-                {{-- Amount --}}
-                <div>
-                    <label for="amount" class="form-label">
-                        Amount <span class="text-red-500">*</span>
-                    </label>
-                    <input id="amount"
-                           type="number"
-                           inputmode="decimal"
-                           step="0.01"
-                           min="0.01"
-                           name="amount"
-                           class="form-input w-full"
-                           x-model="amount"
-                           @blur="formatAmount"
-                           placeholder="0.00"
-                           required>
-                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        Principal amount. Payments you record will reduce the remaining balance.
-                    </p>
-                    @error('amount') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
-                </div>
-
-                {{-- Dates --}}
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label for="loan_date" class="form-label">
-                            Loan Date <span class="text-red-500">*</span>
-                        </label>
-                        <input id="loan_date"
-                               type="date"
-                               name="loan_date"
-                               class="form-input w-full"
-                               x-model="loanDate"
-                               @change="syncDueMin()"
-                               required>
-                        @error('loan_date') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
-                    </div>
-                    <div>
-                        <div class="flex items-center justify-between">
-                            <label for="due_date" class="form-label">Due Date</label>
-                            <div class="flex items-center gap-1">
-                                <button type="button"
-                                        class="px-2 py-1 text-xs rounded-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-                                        @click="setDue(0)">
-                                    Today
-                                </button>
-                                <button type="button"
-                                        class="px-2 py-1 text-xs rounded-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-                                        @click="setDue(7)">
-                                    +7
-                                </button>
-                                <button type="button"
-                                        class="px-2 py-1 text-xs rounded-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-                                        @click="setDue(14)">
-                                    +14
-                                </button>
-                                <button type="button"
-                                        class="px-2 py-1 text-xs rounded-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-                                        @click="setDue(30)">
-                                    +30
-                                </button>
-                                <button type="button"
-                                        class="px-2 py-1 text-xs rounded-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-                                        @click="setDue(60)">
-                                    +60
-                                </button>
-                                <button type="button"
-                                        class="px-2 py-1 text-xs rounded-md border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-                                        @click="clearDue()">
-                                    Clear
-                                </button>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <label :class="type === 'given' ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300 ring-2 ring-blue-500/20' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/40'"
+                               class="border rounded-2xl p-4 flex items-center gap-3.5 cursor-pointer transition">
+                            <input type="radio" name="type" value="given" x-model="type" class="sr-only">
+                            <div class="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+                                </svg>
                             </div>
+                            <div>
+                                <div class="text-sm font-bold text-slate-900 dark:text-white">Given (Receivable)</div>
+                                <div class="text-xs text-slate-500 dark:text-slate-400">Customer owes us</div>
+                            </div>
+                        </label>
+
+                        <label :class="type === 'taken' ? 'border-purple-500 bg-purple-50/50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-300 ring-2 ring-purple-500/20' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/40'"
+                               class="border rounded-2xl p-4 flex items-center gap-3.5 cursor-pointer transition">
+                            <input type="radio" name="type" value="taken" x-model="type" class="sr-only">
+                            <div class="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="text-sm font-bold text-slate-900 dark:text-white">Taken (Payable)</div>
+                                <div class="text-xs text-slate-500 dark:text-slate-400">We owe supplier</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                {{-- Counterparty Selection --}}
+                <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
+                    {{-- Customer Selector --}}
+                    <div x-show="type === 'given'">
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                            Customer Account <span class="text-rose-500">*</span>
+                        </label>
+                        <select name="customer_id" x-model="customerId" class="w-full text-xs rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-blue-500 focus:ring-blue-500">
+                            <option value="">Select Customer...</option>
+                            @foreach($customers as $c)
+                                <option value="{{ $c->id }}" @selected(old('customer_id', $loan->customer_id) == $c->id)>{{ $c->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    {{-- Supplier Selector --}}
+                    <div x-show="type === 'taken'">
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                            Supplier Account <span class="text-rose-500">*</span>
+                        </label>
+                        <select name="supplier_id" x-model="supplierId" class="w-full text-xs rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-purple-500 focus:ring-purple-500">
+                            <option value="">Select Supplier...</option>
+                            @foreach($suppliers as $s)
+                                <option value="{{ $s->id }}" @selected(old('supplier_id', $loan->supplier_id) == $s->id)>{{ $s->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    {{-- Amount --}}
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                            Principal Amount (RWF) <span class="text-rose-500">*</span>
+                        </label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 font-mono text-xs font-bold">
+                                RWF
+                            </div>
+                            <input type="number"
+                                   name="amount"
+                                   step="0.01"
+                                   min="0.01"
+                                   value="{{ old('amount', $loan->amount) }}"
+                                   required
+                                   class="w-full pl-12 pr-4 py-2 text-sm font-mono font-bold rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-teal-500 focus:ring-teal-500">
                         </div>
-                        <input id="due_date"
-                               type="date"
+                    </div>
+
+                    {{-- Status --}}
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                            Status <span class="text-rose-500">*</span>
+                        </label>
+                        <select name="status" required class="w-full py-2 px-3 text-sm rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-teal-500 focus:ring-teal-500">
+                            <option value="pending" @selected(old('status', $loan->status) === 'pending')>Pending (Active Debt)</option>
+                            <option value="paid" @selected(old('status', $loan->status) === 'paid')>Paid (Fully Settled)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    {{-- Loan Date --}}
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                            Loan Issue Date <span class="text-rose-500">*</span>
+                        </label>
+                        <input type="date"
+                               name="loan_date"
+                               value="{{ old('loan_date', optional($loan->loan_date)->format('Y-m-d')) }}"
+                               required
+                               class="w-full py-2 px-3 text-sm rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-teal-500 focus:ring-teal-500">
+                    </div>
+
+                    {{-- Due Date --}}
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                            Repayment Due Date
+                        </label>
+                        <input type="date"
                                name="due_date"
-                               class="form-input w-full"
-                               x-model="dueDate"
-                               :min="loanDate || undefined">
-                        <p class="mt-1 text-xs"
-                           :class="(dueDate && loanDate && dueDate < loanDate)
-                                    ? 'text-red-600 dark:text-red-400'
-                                    : 'text-gray-500 dark:text-gray-400'">
-                            <span x-show="!dueDate">Optional. Use quick chips for convenience.</span>
-                            <span x-show="dueDate && loanDate && dueDate < loanDate">
-                                Due date is before loan date — please review.
-                            </span>
-                            <span x-show="dueDate && (!loanDate || dueDate >= loanDate)">
-                                Expected repayment deadline.
-                            </span>
-                        </p>
-                        @error('due_date') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
+                               value="{{ old('due_date', optional($loan->due_date)->format('Y-m-d')) }}"
+                               class="w-full py-2 px-3 text-sm rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-teal-500 focus:ring-teal-500">
                     </div>
                 </div>
 
-                {{-- Status --}}
+                {{-- Notes / Contract --}}
                 <div>
-                    <label for="status" class="form-label">Status</label>
-                    <select name="status" id="status" class="form-select w-full" x-model="status">
-                        <option value="pending">Pending</option>
-                        <option value="paid">Paid</option>
-                    </select>
-                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        <span x-show="status==='pending'">
-                            Keep as pending; loan auto-closes when fully paid.
-                        </span>
-                        <span x-show="status==='paid'">
-                            Marks as settled (no payment entry is created automatically).
-                        </span>
-                    </p>
-                    @error('status') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
+                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                        Notes & Terms
+                    </label>
+                    <textarea name="notes"
+                              rows="3"
+                              class="w-full text-sm rounded-xl border-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-white focus:border-teal-500 focus:ring-teal-500">{{ old('notes', $loan->notes) }}</textarea>
                 </div>
 
-                {{-- Notes --}}
-                <div>
-                    <label for="notes" class="form-label">Notes</label>
-                    <textarea id="notes" name="notes" rows="3" class="form-textarea w-full"
-                              placeholder="Reference / comment…">{{ old('notes', $loan->notes) }}</textarea>
-                    @error('notes') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
-                </div>
-
-                {{-- Actions --}}
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-                    <div class="text-xs text-gray-500 dark:text-gray-400">
-                        <span class="inline-flex items-center gap-1">
-                            <i data-lucide="info" class="w-3.5 h-3.5"></i>
-                            Linked sale/purchase (if any) will reflect status via observers.
-                        </span>
-                    </div>
-                    <div class="flex justify-end gap-3">
-                        @can('loans.view')
-                            <a href="{{ route('loans.index') }}" class="btn btn-outline">Cancel</a>
-                        @endcan
-                        <button type="submit" class="btn btn-success">Update Loan</button>
-                    </div>
+                {{-- Action Bar --}}
+                <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                    <a href="{{ route('loans.show', $loan) }}"
+                       class="px-4 py-2.5 text-xs font-semibold rounded-xl text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 transition">
+                        Cancel
+                    </a>
+                    <button type="submit"
+                            class="inline-flex items-center gap-1.5 px-5 py-2.5 text-xs font-semibold rounded-xl text-white bg-teal-600 hover:bg-teal-500 shadow-sm transition">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        Update Loan Record
+                    </button>
                 </div>
             </form>
         @else
-            <div class="p-6 text-sm text-amber-700 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-xl">
-                You do not have permission to edit loans. Please contact your administrator if you believe this is an error.
-                @can('loans.view')
-                    <div class="mt-3">
-                        <a href="{{ route('loans.show', $loan) }}" class="btn btn-secondary btn-sm">
-                            <i data-lucide="eye" class="w-4 h-4"></i> View Loan
-                        </a>
-                        <a href="{{ route('loans.index') }}" class="btn btn-outline btn-sm">
-                            Back to Loans
-                        </a>
-                    </div>
-                @endcan
+            <div class="p-6 text-center text-amber-700 dark:text-amber-300">
+                You do not have permission to edit loans.
             </div>
         @endcan
     </div>
 </div>
-
-@push('scripts')
-<script src="https://unpkg.com/lucide@latest"></script>
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-    if (window.lucide) lucide.createIcons();
-});
-
-function loanEdit(config) {
-    return {
-        type: config.initType || 'given',
-        loanDate: config.initLoanDate || '',
-        dueDate: config.initDueDate || '',
-        amount: config.initAmount || '',
-        status: config.initStatus || 'pending',
-
-        init() {
-            this.$nextTick(() => this.syncDueMin());
-        },
-
-        onTypeChange() {
-            // Clear opposite party to avoid invalid combos
-            if (this.type === 'given' && this.$refs?.supplier) {
-                this.$refs.supplier.value = '';
-            }
-            if (this.type === 'taken' && this.$refs?.customer) {
-                this.$refs.customer.value = '';
-            }
-        },
-
-        setDue(days) {
-            if (!this.loanDate) {
-                this.loanDate = (new Date()).toISOString().slice(0, 10);
-            }
-            const base = new Date(this.loanDate + 'T00:00:00');
-            base.setDate(base.getDate() + Number(days || 0));
-            const y = base.getFullYear();
-            const m = String(base.getMonth() + 1).padStart(2, '0');
-            const d = String(base.getDate()).padStart(2, '0');
-            this.dueDate = `${y}-${m}-${d}`;
-        },
-
-        clearDue() {
-            this.dueDate = '';
-        },
-
-        syncDueMin() {
-            const due = document.getElementById('due_date');
-            if (due && this.loanDate) {
-                due.min = this.loanDate;
-            }
-        },
-
-        formatAmount() {
-            if (this.amount === '' || isNaN(this.amount)) return;
-            const num = parseFloat(this.amount);
-            if (isFinite(num)) {
-                this.amount = num.toFixed(2);
-            }
-        }
-    }
-}
-</script>
-@endpush
 @endsection

@@ -22,6 +22,10 @@ class StatementController extends Controller
         $suppliers = Supplier::orderBy('name')->get();
         $data = $this->getSupplierData($request);
 
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json(array_merge(['suppliers' => $suppliers], $data));
+        }
+
         return view('reports.suppliers.statement', array_merge(['suppliers' => $suppliers], $data));
     }
 
@@ -140,6 +144,10 @@ class StatementController extends Controller
     {
         $customers = Customer::orderBy('name')->get();
         $data = $this->getCustomerData($request);
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json(array_merge(['customers' => $customers], $data));
+        }
 
         return view('reports.customers.statement', array_merge(['customers' => $customers], $data));
     }

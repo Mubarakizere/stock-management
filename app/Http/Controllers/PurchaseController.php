@@ -58,7 +58,7 @@ class PurchaseController extends Controller
 
     public function index(Request $request)
     {
-        $perPage = in_array((int)$request->get('per_page'), [10,15,25,50,100]) ? (int)$request->get('per_page') : 10;
+        $perPage = in_array((int)$request->get('per_page'), [10,15,25,50,100]) ? (int)$request->get('per_page') : 25;
 
         $query = Purchase::with(['supplier', 'user'])
             ->withSum('returns as returns_value_sum', 'total_amount')
@@ -94,6 +94,19 @@ class PurchaseController extends Controller
             $query->whereDate('purchase_date', '<=', $request->to);
         }
 
+        // Aggregate statistics for the filtered query
+        $totalSpend   = (float) (clone $query)->sum('total_amount');
+        $totalPaid    = (float) (clone $query)->sum('amount_paid');
+        $totalBalance = (float) (clone $query)->sum('balance_due');
+        $totalCount   = (clone $query)->count();
+
+        $stats = [
+            'total_spend'   => $totalSpend,
+            'total_paid'    => $totalPaid,
+            'total_balance' => $totalBalance,
+            'total_count'   => $totalCount,
+        ];
+
         $purchases = $query->latest('purchase_date')
             ->latest('id')
             ->paginate($perPage)
@@ -102,7 +115,15 @@ class PurchaseController extends Controller
         $suppliers = Supplier::orderBy('name')->get(['id','name']);
         $paymentChannels = PaymentChannel::where('is_active', true)->get();
 
-        return view('purchases.index', compact('purchases', 'suppliers', 'paymentChannels'));
+        if ($request->wantsJson()) {
+            return response()->json([
+                'html'       => view('purchases._table', compact('purchases'))->render(),
+                'pagination' => $purchases->links()->toHtml(),
+                'stats'      => $stats,
+            ]);
+        }
+
+        return view('purchases.index', compact('purchases', 'suppliers', 'paymentChannels', 'stats'));
     }
 
     public function create()
