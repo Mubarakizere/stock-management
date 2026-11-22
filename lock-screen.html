@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Migration Notice — Nezerwa Plus ERP</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #090d16;
+            --bg-card: rgba(15, 23, 42, 0.75);
+            --border-card: rgba(255, 255, 255, 0.1);
+            --border-highlight: rgba(13, 148, 136, 0.4);
+            --primary: #0d9488;
+            --primary-hover: #0f766e;
+            --primary-glow: rgba(13, 148, 136, 0.35);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --text-sub: #cbd5e1;
+            --accent-amber: #f59e0b;
+            --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px 16px;
+            position: relative;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Ambient Background Gradients */
+        .ambient-glow {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(120px);
+            opacity: 0.25;
+            pointer-events: none;
+            z-index: 0;
+        }
+        .glow-1 {
+            width: 500px;
+            height: 500px;
+            background: #0d9488;
+            top: -100px;
+            left: -100px;
+        }
+        .glow-2 {
+            width: 450px;
+            height: 450px;
+            background: #2563eb;
+            bottom: -80px;
+            right: -80px;
+        }
+
+        /* Subtle Grid Overlay */
+        .grid-overlay {
+            position: fixed;
+            inset: 0;
+            background-image: 
+                linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 80%);
+            -webkit-mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 80%);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* Container Card */
+        .lock-container {
+            position: relative;
+            z-index: 2;
+            width: 100%;
+            max-width: 620px;
+            background: var(--bg-card);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--border-card);
+            border-radius: 28px;
+            padding: 44px 38px;
+            box-shadow: 
+                0 25px 60px -15px rgba(0, 0, 0, 0.7),
+                0 0 0 1px rgba(255, 255, 255, 0.05);
+            text-align: center;
+        }
+
+        /* Security Lock Icon Badge */
+        .icon-badge-wrapper {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 76px;
+            height: 76px;
+            margin-bottom: 24px;
+        }
+        .icon-badge-halo {
+            position: absolute;
+            inset: 0;
+            border-radius: 24px;
+            background: linear-gradient(135deg, rgba(13, 148, 136, 0.3), rgba(37, 99, 235, 0.3));
+            filter: blur(12px);
+            animation: pulseHalo 3s ease-in-out infinite alternate;
+        }
+        .icon-badge {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            border-radius: 22px;
+            background: linear-gradient(145deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.95));
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #2dd4bf;
+            box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.15);
+        }
+        .icon-badge svg {
+            width: 36px;
+            height: 36px;
+        }
+
+        @keyframes pulseHalo {
+            0% { transform: scale(0.95); opacity: 0.6; }
+            100% { transform: scale(1.1); opacity: 0.9; }
+        }
+
+        /* System Status Pill */
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            border-radius: 9999px;
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.25);
+            color: #fbbf24;
+            font-size: 11.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 18px;
+        }
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background-color: #f59e0b;
+            box-shadow: 0 0 8px #f59e0b;
+            animation: blink 2s infinite ease-in-out;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        /* Typography */
+        h1 {
+            font-size: 26px;
+            font-weight: 800;
+            line-height: 1.3;
+            letter-spacing: -0.02em;
+            margin-bottom: 12px;
+            color: #ffffff;
+        }
+        p.subtitle {
+            font-size: 14.5px;
+            line-height: 1.6;
+            color: var(--text-muted);
+            margin-bottom: 28px;
+            max-width: 520px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Domain Highlight Box */
+        .domain-card {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-highlight);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 26px;
+            text-align: left;
+            position: relative;
+            overflow: hidden;
+        }
+        .domain-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #2dd4bf, transparent);
+        }
+        .domain-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .domain-target {
+            font-family: var(--font-mono);
+            font-size: 17px;
+            font-weight: 600;
+            color: #2dd4bf;
+            word-break: break-all;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .copy-btn {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #e2e8f0;
+            padding: 6px 12px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-family: var(--font-sans);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        .copy-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Action Buttons */
+        .cta-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            padding: 16px 24px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #0d9488, #0f766e);
+            color: #ffffff;
+            font-size: 15px;
+            font-weight: 700;
+            text-decoration: none;
+            box-shadow: 0 10px 25px -5px var(--primary-glow);
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            cursor: pointer;
+        }
+        .cta-button:hover {
+            transform: translateY(-2px);
+            background: linear-gradient(135deg, #14b8a6, #0d9488);
+            box-shadow: 0 14px 30px -5px rgba(20, 184, 166, 0.45);
+        }
+        .cta-button svg {
+            width: 18px;
+            height: 18px;
+            transition: transform 0.2s ease;
+        }
+        .cta-button:hover svg {
+            transform: translateX(3px);
+        }
+
+        /* Auto-redirect Banner */
+        .redirect-notice {
+            margin-top: 18px;
+            font-size: 12.5px;
+            color: #94a3b8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .redirect-timer {
+            font-weight: 700;
+            color: #2dd4bf;
+            font-family: var(--font-mono);
+        }
+
+        /* Enterprise Security Footer Info */
+        .security-footer {
+            margin-top: 32px;
+            padding-top: 22px;
+            border-top: 1px solid rgba(255, 255, 255, 0.07);
+            font-size: 12px;
+            color: #64748b;
+            line-height: 1.5;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .security-footer-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .security-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .security-tag svg {
+            width: 13px;
+            height: 13px;
+            color: #2dd4bf;
+        }
+
+        /* Responsive */
+        @media (max-width: 640px) {
+            .lock-container {
+                padding: 34px 22px;
+                border-radius: 22px;
+            }
+            h1 {
+                font-size: 22px;
+            }
+            .domain-target {
+                font-size: 14.5px;
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .copy-btn {
+                align-self: flex-end;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Glow FX -->
+    <div class="ambient-glow glow-1"></div>
+    <div class="ambient-glow glow-2"></div>
+    <div class="grid-overlay"></div>
+
+    <main class="lock-container">
+
+        <!-- Shield / Lock Badge -->
+        <div class="icon-badge-wrapper">
+            <div class="icon-badge-halo"></div>
+            <div class="icon-badge">
+                <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                          d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                </svg>
+            </div>
+        </div>
+
+        <!-- Status Pill -->
+        <div>
+            <div class="status-pill">
+                <span class="status-dot"></span>
+                <span>System Relocated</span>
+            </div>
+        </div>
+
+        <!-- Headline & Description -->
+        <h1>Nezerwa Plus Has Moved</h1>
+        <p class="subtitle">
+            This endpoint has been decommissioned as part of our scheduled infrastructure upgrade. 
+            All manufacturing, inventory, sales, and accounting modules are now operating on our dedicated production host.
+        </p>
+
+        <!-- Official Destination Card -->
+        <div class="domain-card">
+            <div class="domain-label">
+                <span>Official Production Domain</span>
+                <span style="color: #2dd4bf;">Active &amp; Secure</span>
+            </div>
+            <div class="domain-target">
+                <span id="domain-text">https://nezerwaplus.stockcenterapp.rw</span>
+                <button type="button" class="copy-btn" id="copy-btn" onclick="copyDomain()">
+                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                    </svg>
+                    <span id="copy-label">Copy URL</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Primary Action Button -->
+        <a href="https://nezerwaplus.stockcenterapp.rw" class="cta-button" id="proceed-btn">
+            <span>Proceed to Production System</span>
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+            </svg>
+        </a>
+
+        <!-- Auto-redirect Countdown -->
+        <div class="redirect-notice">
+            <span>Automatic redirection in</span>
+            <span class="redirect-timer" id="countdown">10</span>
+            <span>seconds...</span>
+            <button onclick="cancelRedirect()" style="background:none; border:none; color:#f59e0b; font-size:12px; cursor:pointer; text-decoration:underline; margin-left:4px;" id="cancel-btn">Pause</button>
+        </div>
+
+        <!-- Corporate Security Footer -->
+        <footer class="security-footer">
+            <div class="security-footer-row">
+                <span class="security-tag">
+                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                    </svg>
+                    SSL 256-Bit Encrypted
+                </span>
+                <span>•</span>
+                <span class="security-tag">
+                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7c-2 0-3 1-3 3z"/>
+                    </svg>
+                    StockCenter Cloud Infrastructure
+                </span>
+            </div>
+            <p>
+                Please update your browser bookmarks and password managers. All user accounts and transactional ledgers remain fully intact.
+            </p>
+        </footer>
+
+    </main>
+
+    <script>
+        const targetUrl = "https://nezerwaplus.stockcenterapp.rw";
+        let secondsLeft = 10;
+        let redirectTimer = null;
+        let isPaused = false;
+
+        const countdownElem = document.getElementById("countdown");
+        const cancelBtn = document.getElementById("cancel-btn");
+
+        // Start countdown
+        redirectTimer = setInterval(() => {
+            if (isPaused) return;
+            secondsLeft--;
+            if (countdownElem) {
+                countdownElem.textContent = secondsLeft;
+            }
+            if (secondsLeft <= 0) {
+                clearInterval(redirectTimer);
+                window.location.href = targetUrl;
+            }
+        }, 1000);
+
+        function cancelRedirect() {
+            isPaused = !isPaused;
+            if (isPaused) {
+                cancelBtn.textContent = "Resume";
+                cancelBtn.style.color = "#2dd4bf";
+            } else {
+                cancelBtn.textContent = "Pause";
+                cancelBtn.style.color = "#f59e0b";
+            }
+        }
+
+        function copyDomain() {
+            const domain = "https://nezerwaplus.stockcenterapp.rw";
+            navigator.clipboard.writeText(domain).then(() => {
+                const label = document.getElementById("copy-label");
+                const originalText = label.textContent;
+                label.textContent = "Copied!";
+                setTimeout(() => {
+                    label.textContent = originalText;
+                }, 2000);
+            }).catch(() => {
+                const input = document.createElement("input");
+                input.value = domain;
+                document.body.appendChild(input);
+                input.select();
+                document.execCommand("copy");
+                document.body.removeChild(input);
+                document.getElementById("copy-label").textContent = "Copied!";
+            });
+        }
+    </script>
+</body>
+</html>
